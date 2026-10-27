@@ -26,7 +26,8 @@ site = {
     "accent": "#b45309",
     "lang": "en",
     "home": "home",
-    "head": '<script defer src="https://lumen.borodutch.com/l.js"></script>',
+    "head": '<script defer src="https://lumen.borodutch.com/l.js"></script>\n'
+            '<meta name="google-site-verification" content="hEhCz1eKYaKokccds4_UjFgxWsBL3lS1sSsipnx4aaE" />',
 }
 pages = {
     "home": {"title": "Lanternlog: blogs that search engines and AI assistants can read",
