@@ -26,6 +26,7 @@ site = {
     "accent": "#b45309",
     "lang": "en",
     "home": "home",
+    "head": '<script defer src="https://lumen.borodutch.com/l.js"></script>',
 }
 pages = {
     "home": {"title": "Lanternlog: blogs that search engines and AI assistants can read",
