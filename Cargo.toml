@@ -1,10 +1,10 @@
 [package]
-name = "tugpress"
+name = "lanternlog"
 version = "0.1.0"
 edition = "2024"
 license = "MIT"
 description = "One small server for many blogs on many domains, built for search engines and AI answers"
-repository = "https://github.com/backmeupplz/tugpress"
+repository = "https://github.com/backmeupplz/lanternlog"
 
 [dependencies]
 anyhow = "1"

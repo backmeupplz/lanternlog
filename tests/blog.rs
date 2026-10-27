@@ -51,9 +51,9 @@ async fn get(app: &Router, path: &str) -> Res {
 
 #[tokio::test]
 async fn a_blog_from_creation_to_every_file_it_serves() {
-    let dir = std::env::temp_dir().join(format!("tugpress-test-{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("lanternlog-test-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
-    let app = tugpress::router(tugpress::App::open(&dir, TOKEN, "https", false).unwrap());
+    let app = lanternlog::router(lanternlog::App::open(&dir, TOKEN, "https", false).unwrap());
 
     // The API wants the token; bad input is refused.
     assert_eq!(send(&app, "GET", HOST, "/api/sites", false, None, &[]).await.status, StatusCode::UNAUTHORIZED);
@@ -153,7 +153,7 @@ async fn a_blog_from_creation_to_every_file_it_serves() {
     let image = get(&app, &path).await;
     assert_eq!(image.body, png);
     assert!(image.headers["cache-control"].to_str().unwrap().contains("immutable"));
-    assert_eq!(get(&app, "/media/../../tugpress.db").await.status, StatusCode::NOT_FOUND);
+    assert_eq!(get(&app, "/media/../../lanternlog.db").await.status, StatusCode::NOT_FOUND);
 
     // Deleting a post takes it off the site.
     send(&app, "DELETE", "admin", "/api/sites/blog.example.com/posts/one-server", true, None, &[]).await;
