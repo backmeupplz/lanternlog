@@ -164,7 +164,7 @@ fn build(app: &App, host: &str, path: &str) -> Result<Cached, Box<Response<Body>
     }
     let rest = &path[1..];
     if let Some(slug) = rest.strip_prefix("og/").and_then(|r| r.strip_suffix(".png")) {
-        return find(slug).map_or_else(|| Err(missing()), |p| card(&p.title, "", &render::card_meta(p)));
+        return find(slug).map_or_else(|| Err(missing()), |p| card(&p.title, &p.description, &render::card_meta(p)));
     }
     if let Some(file) = rest.strip_prefix("media/") {
         return Err(Box::new(media(app, &site.host, file)));

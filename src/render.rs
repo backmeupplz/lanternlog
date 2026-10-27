@@ -75,9 +75,71 @@ pub fn markdown(md: &str) -> Doc {
         }
     }
     let mut out = String::new();
-    pulldown_cmark::html::push_html(&mut out, events.into_iter());
+    pulldown_cmark::html::push_html(&mut out, tables(events).into_iter());
     let html = out.replace("<img src=", "<img loading=\"lazy\" decoding=\"async\" src=");
     Doc { html, toc, text: text.split_whitespace().collect::<Vec<_>>().join(" ") }
+}
+
+/// Tables that read on a phone too. Two columns are terms and what they mean, so they become a definition list;
+/// wider tables keep their grid on wide screens, with every cell labelled by its column so that on narrow ones
+/// each row turns into a card (style.rs).
+fn tables(events: Vec<Event>) -> Vec<Event> {
+    let mut out = Vec::with_capacity(events.len());
+    let mut it = events.into_iter();
+    while let Some(ev) = it.next() {
+        if !matches!(ev, Event::Start(Tag::Table(_))) {
+            out.push(ev);
+            continue;
+        }
+        let (mut head, mut rows, mut row, mut cell, mut in_head) = (Vec::new(), Vec::new(), Vec::new(), Vec::new(), false);
+        for ev in it.by_ref() {
+            match ev {
+                Event::End(TagEnd::Table) => break,
+                Event::Start(Tag::TableHead) => in_head = true,
+                Event::End(TagEnd::TableHead) => in_head = false,
+                Event::Start(Tag::TableRow) => row = Vec::new(),
+                Event::End(TagEnd::TableRow) if !in_head => rows.push(std::mem::take(&mut row)),
+                Event::Start(Tag::TableCell) => cell = Vec::new(),
+                Event::End(TagEnd::TableCell) => {
+                    let mut html = String::new();
+                    pulldown_cmark::html::push_html(&mut html, std::mem::take(&mut cell).into_iter());
+                    if in_head { head.push(html) } else { row.push(html) }
+                }
+                ev => cell.push(ev),
+            }
+        }
+        out.push(Event::Html(table_html(&head, &rows).into()));
+    }
+    out
+}
+
+fn table_html(head: &[String], rows: &[Vec<String>]) -> String {
+    let cell = |r: &[String], i: usize| r.get(i).cloned().unwrap_or_default();
+    if head.len() == 2 {
+        let items: String = rows.iter().map(|r| format!("<div><dt>{}</dt><dd>{}</dd></div>\n", cell(r, 0), cell(r, 1))).collect();
+        return format!("<dl class=\"defs\">\n{items}</dl>\n");
+    }
+    let label = |i: usize| {
+        let (mut text, mut tag) = (String::new(), false);
+        for c in head.get(i).map(String::as_str).unwrap_or("").chars() {
+            match c {
+                '<' => tag = true,
+                '>' => tag = false,
+                c if !tag => text.push(c),
+                _ => {}
+            }
+        }
+        text.trim().replace('"', "&quot;")
+    };
+    let th: String = head.iter().map(|h| format!("<th scope=\"col\">{h}</th>")).collect();
+    let body: String = rows
+        .iter()
+        .map(|r| {
+            let cells: String = (1..head.len()).map(|i| format!("<td data-label=\"{}\"><span>{}</span></td>", label(i), cell(r, i))).collect();
+            format!("<tr><th scope=\"row\">{}</th>{cells}</tr>\n", cell(r, 0))
+        })
+        .collect();
+    format!("<div class=\"table\"><table>\n<thead><tr>{th}</tr></thead>\n<tbody>\n{body}</tbody></table></div>\n")
 }
 
 /// Lowercase words joined by hyphens, for heading ids and tag addresses.

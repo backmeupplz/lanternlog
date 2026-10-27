@@ -198,3 +198,14 @@ async fn a_blog_from_creation_to_every_file_it_serves() {
     assert_eq!(get(&app, "/one-server/").await.status, StatusCode::NOT_FOUND);
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+#[test]
+fn tables_read_on_a_phone() {
+    let two = lanternlog::render::markdown("| Variable | What it does |\n|---|---|\n| `PORT` | Port to [listen](https://x.org) on |\n");
+    assert!(two.html.contains("<dl class=\"defs\">"), "{}", two.html);
+    assert!(two.html.contains("<dt><code>PORT</code></dt><dd>Port to <a href=\"https://x.org\">listen</a> on</dd>"), "{}", two.html);
+    let wide = lanternlog::render::markdown("| Plan | *Price* | Seats |\n|---|---|---|\n| Team | $5 | 10 |\n| Solo | Free |  |\n");
+    assert!(wide.html.contains("<th scope=\"row\">Team</th><td data-label=\"Price\"><span>$5</span></td><td data-label=\"Seats\"><span>10</span></td>"), "{}", wide.html);
+    assert!(wide.html.contains("<th scope=\"col\"><em>Price</em></th>"), "{}", wide.html);
+    assert!(wide.text.contains("Team $5 10"), "plain text keeps the cells: {}", wide.text);
+}

@@ -93,10 +93,23 @@ h1{font-size:clamp(2rem,1.35rem + 2.6vw,2.85rem);line-height:1.1;letter-spacing:
 .prose blockquote{margin:1.8rem 0;padding:.1rem 0 .1rem 1.25rem;border-left:3px solid var(--accent);color:var(--muted);font-style:italic}
 .prose img,.prose video,.prose iframe{display:block;max-width:100%;height:auto;margin:1.8rem auto;border-radius:12px}
 .prose hr{width:5rem;margin:2.8rem auto;border:0;border-top:1px solid var(--line)}
-.prose table{display:block;width:100%;overflow-x:auto;border-collapse:collapse;margin:1.8rem 0;font:.95rem/1.5 var(--sans)}
+.prose .table{margin:1.8rem 0}
+.prose table{width:100%;border-collapse:collapse;font:.95rem/1.5 var(--sans)}
 .prose th,.prose td{padding:.6rem .8rem;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
-.prose th{font-weight:650;border-bottom-width:2px}
-.prose td code{overflow-wrap:break-word}.prose td:first-child code{overflow-wrap:anywhere}
+.prose thead th{font-weight:650;border-bottom-width:2px}
+.prose tbody th{font-weight:650}
+.prose td code,.prose dd code{overflow-wrap:break-word}.prose tbody th code{white-space:nowrap}.prose dt code{overflow-wrap:anywhere}
+.prose dl{margin:1.8rem 0;font:.98rem/1.55 var(--sans);border-top:1px solid var(--line)}
+.prose dl>div{display:grid;grid-template-columns:minmax(8rem,34%) minmax(0,1fr);gap:.3rem 1.2rem;padding:.7rem 0;border-bottom:1px solid var(--line)}
+.prose dt{font-weight:650}
+.prose dd{margin:0;color:var(--muted)}
+@media (max-width:45rem){.prose dl>div{display:block}.prose dd{margin-top:.25rem}
+.prose table,.prose tbody,.prose tr,.prose tbody th,.prose td{display:block}
+.prose thead{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+.prose tbody tr{margin:0 0 .8rem;padding:.35rem 0 .5rem;border:1px solid var(--line);border-radius:12px;background:var(--card)}
+.prose tbody th{padding:.55rem .9rem .3rem;border:0}.prose tbody th code{white-space:normal;overflow-wrap:anywhere}
+.prose td{display:grid;grid-template-columns:7rem minmax(0,1fr);gap:.75rem;padding:.3rem .9rem;border:0}
+.prose td::before{content:attr(data-label);color:var(--muted);font-size:.88rem}}
 .prose .button{font-size:1rem}
 code{font-family:var(--mono);font-size:.86em}
 :not(pre)>code{padding:.12em .38em;border-radius:6px;background:var(--soft)}

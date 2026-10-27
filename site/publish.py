@@ -33,7 +33,7 @@ pages = {
     "home": {"title": "Lanternlog: blogs that search engines and AI assistants can read",
              "description": "An open-source server that hosts many blogs on their own domains and makes every post easy for search engines and AI assistants to find and cite.",
              "body": (HERE / "home.md").read_text(), "kind": "page", "status": "published"},
-    "docs": {"title": "Docs", "description": "How to install Lanternlog, create blogs on it and publish posts through its API.",
+    "docs": {"title": "Lanternlog docs", "description": "How to install Lanternlog, create blogs on it and publish posts through its API.",
              "body": (HERE / "docs.md").read_text(), "kind": "page", "status": "published"},
 }
 req = urllib.request.Request(API + "/media", data=(HERE / "logo.png").read_bytes(), method="POST",
