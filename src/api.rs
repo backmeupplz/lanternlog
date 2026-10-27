@@ -120,6 +120,9 @@ async fn put_site(_: Admin, State(app): State<Arc<App>>, Path(host): Path<String
     if !(s.accent.len() == 4 || s.accent.len() == 7) || !s.accent.starts_with('#') || !s.accent[1..].bytes().all(|b| b.is_ascii_hexdigit()) {
         return Err(bad("accent must be a color such as #2563eb"));
     }
+    if !s.home.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-') {
+        return Err(bad("home is the slug of one of the site's pages"));
+    }
     check_url("project_url", &s.project_url, false)?;
     check_url("author_url", &s.author_url, false)?;
     s.updated_at = now();

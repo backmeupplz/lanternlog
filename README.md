@@ -5,7 +5,7 @@ Lanternlog is one small server that hosts many blogs, each on its own domain, an
 ## What every blog gets
 
 - **Pages that render in the HTML.** No JavaScript is needed to read a post, so crawlers that don't run scripts, including most AI crawlers, see everything.
-- **Structured data on every page:** `BlogPosting` or `WebPage` with author, dates, word count and image, plus `BreadcrumbList` on posts and `Blog` on the home page.
+- **Structured data on every page:** `BlogPosting` or `WebPage` with author, dates, word count and image, plus `BreadcrumbList` on posts and `Blog` (or `WebSite`, with a custom front page) on the home page.
 - **A share image for every post,** a 1200×630 card drawn from the post's title, with Open Graph and Twitter tags pointing at it.
 - **Canonical addresses.** Extra domains and `www.` redirect to the main one, and paths without a trailing slash redirect to the one with it.
 - **Files for crawlers and assistants:** `sitemap.xml`, an Atom feed at `feed.xml` with full posts, `robots.txt`, [`llms.txt`](https://llmstxt.org) and `llms-full.txt`, and a Markdown copy of every page at `/slug.md`.
@@ -73,7 +73,7 @@ curl -X PUT https://blog.example.com/api/sites/blog.example.com/posts/one-server
   }'
 ```
 
-The answer holds the post's address. Set `"kind": "page"` for pages such as About: they appear in the header instead of the post list and the feed.
+The answer holds the post's address. Set `"kind": "page"` for pages such as About: they appear in the header instead of the post list and the feed. To give a blog a front page of its own, publish a page and set the blog's `"home"` to its slug; the page then shows at `/`, with the latest posts below it.
 
 | Call | What it does |
 |---|---|

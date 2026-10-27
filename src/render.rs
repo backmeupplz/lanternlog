@@ -137,7 +137,12 @@ impl<'a> Ctx<'a> {
         self.posts.iter().filter(|p| p.kind != "page")
     }
     fn pages(&self) -> impl Iterator<Item = &'a Post> {
-        self.posts.iter().filter(|p| p.kind == "page")
+        let home = &self.site.home;
+        self.posts.iter().filter(move |p| p.kind == "page" && p.slug != *home)
+    }
+    /// The page shown as the home page, when the site names one.
+    fn home(&self) -> Option<&'a Post> {
+        self.posts.iter().find(|p| !self.site.home.is_empty() && p.kind == "page" && p.slug == self.site.home)
     }
     fn project(&self) -> Option<(String, &str)> {
         let s = self.site;
@@ -291,16 +296,22 @@ fn list(posts: &[&Post]) -> Markup {
 pub fn index(cx: &Ctx) -> String {
     let s = cx.site;
     let posts: Vec<&Post> = cx.articles().collect();
+    let home = cx.home();
+    let doc = home.map(|p| markdown(&p.body));
+    let description = match (home, &doc) {
+        (Some(p), Some(d)) => summary(p, d),
+        _ => s.description.clone(),
+    };
     let ld = json!({
-        "@context": "https://schema.org", "@type": "Blog", "name": s.title, "url": format!("{}/", cx.home),
-        "description": s.description, "inLanguage": s.lang, "publisher": cx.publisher(),
+        "@context": "https://schema.org", "@type": if home.is_some() { "WebSite" } else { "Blog" }, "name": s.title,
+        "url": format!("{}/", cx.home), "description": description, "inLanguage": s.lang, "publisher": cx.publisher(),
         "blogPost": posts.iter().take(30).map(|p| json!({"@type": "BlogPosting", "headline": p.title, "url": cx.url(p),
             "datePublished": p.published_at.map(iso)})).collect::<Vec<_>>(),
     });
     let head = Head {
-        title: s.title.clone(),
-        headline: &s.title,
-        description: s.description.clone(),
+        title: home.map_or_else(|| s.title.clone(), |p| p.title.clone()),
+        headline: home.map_or(&s.title, |p| &p.title),
+        description,
         url: format!("{}/", cx.home),
         image: format!("{}/og.png?v={}", cx.home, s.updated_at),
         kind: "website",
@@ -312,9 +323,15 @@ pub fn index(cx: &Ctx) -> String {
         ld,
     };
     let body = html! {
-        h1 { (s.title) }
-        @if !s.description.is_empty() { p.lead { (s.description) } }
-        (list(&posts))
+        @if let (Some(p), Some(d)) = (home, &doc) {
+            h1 { (p.title) }
+            (PreEscaped(&d.html))
+            @if !posts.is_empty() { h2 { "From the blog" } (list(&posts)) }
+        } @else {
+            h1 { (s.title) }
+            @if !s.description.is_empty() { p.lead { (s.description) } }
+            (list(&posts))
+        }
     };
     layout(cx, head, body)
 }
@@ -478,7 +495,7 @@ pub fn sitemap(cx: &Ctx) -> String {
     let latest = cx.posts.iter().map(|p| p.updated_at).max().unwrap_or(cx.site.updated_at).max(cx.site.updated_at);
     let mut x = String::from("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">\n");
     x += &format!("<url><loc>{}/</loc><lastmod>{}</lastmod></url>\n", cx.home, iso(latest));
-    for p in cx.posts {
+    for p in cx.posts.iter().filter(|p| p.slug != cx.site.home) {
         x += &format!("<url><loc>{}</loc><lastmod>{}</lastmod></url>\n", cx.url(p), iso(p.updated_at));
     }
     x + "</urlset>\n"

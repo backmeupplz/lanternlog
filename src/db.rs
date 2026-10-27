@@ -19,6 +19,7 @@ CREATE TABLE IF NOT EXISTS sites (
   project_url TEXT NOT NULL DEFAULT '',
   cta TEXT NOT NULL DEFAULT '',
   accent TEXT NOT NULL DEFAULT '#2563eb',
+  home TEXT NOT NULL DEFAULT '',
   indexnow_key TEXT NOT NULL,
   updated_at INTEGER NOT NULL
 );
@@ -55,6 +56,8 @@ pub struct Site {
     pub project_url: String,
     pub cta: String,
     pub accent: String,
+    /// The slug of a page to show as the home page, above the latest posts.
+    pub home: String,
     #[serde(skip_deserializing)]
     pub indexnow_key: String,
     #[serde(skip_deserializing)]
@@ -102,6 +105,7 @@ fn site_row(r: &Row) -> rusqlite::Result<Site> {
         project_url: r.get("project_url")?,
         cta: r.get("cta")?,
         accent: r.get("accent")?,
+        home: r.get("home")?,
         indexnow_key: r.get("indexnow_key")?,
         updated_at: r.get("updated_at")?,
     })
@@ -139,10 +143,10 @@ pub fn sites(c: &Connection) -> rusqlite::Result<Vec<Site>> {
 pub fn put_site(c: &Connection, s: &Site) -> rusqlite::Result<()> {
     let key = format!("{:032x}", rand::random::<u128>());
     c.execute(
-        "INSERT INTO sites (host, aliases, title, description, lang, author, author_url, project_name, project_url, cta, accent, indexnow_key, updated_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)
+        "INSERT INTO sites (host, aliases, title, description, lang, author, author_url, project_name, project_url, cta, accent, home, indexnow_key, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)
          ON CONFLICT (host) DO UPDATE SET aliases = ?2, title = ?3, description = ?4, lang = ?5, author = ?6, author_url = ?7,
-           project_name = ?8, project_url = ?9, cta = ?10, accent = ?11, updated_at = ?13",
+           project_name = ?8, project_url = ?9, cta = ?10, accent = ?11, home = ?12, updated_at = ?14",
         params![
             s.host,
             serde_json::to_string(&s.aliases).unwrap_or_default(),
@@ -155,6 +159,7 @@ pub fn put_site(c: &Connection, s: &Site) -> rusqlite::Result<()> {
             s.project_url,
             s.cta,
             s.accent,
+            s.home,
             key,
             s.updated_at
         ],

@@ -179,6 +179,9 @@ fn build(app: &App, host: &str, path: &str) -> Result<Cached, Box<Response<Body>
     if let Some(p) = rest.strip_suffix(".md").and_then(find) {
         return Ok(Cached::new("text/markdown; charset=utf-8", render::copy(&cx, p), 300));
     }
+    if !site.home.is_empty() && rest.trim_end_matches('/') == site.home {
+        return Err(Box::new(redirect("/")));
+    }
     match rest.strip_suffix('/').and_then(find) {
         Some(p) => Ok(html(render::article(&cx, p))),
         None if find(rest).is_some() => Err(Box::new(redirect(&format!("/{rest}/")))),

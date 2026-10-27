@@ -155,6 +155,15 @@ async fn a_blog_from_creation_to_every_file_it_serves() {
     assert!(image.headers["cache-control"].to_str().unwrap().contains("immutable"));
     assert_eq!(get(&app, "/media/../../lanternlog.db").await.status, StatusCode::NOT_FOUND);
 
+    // A page can stand in for the home page, with the posts below it.
+    let mut with_home = site.clone();
+    with_home["home"] = json!("about");
+    assert_eq!(send(&app, "PUT", "admin", "/api/sites/blog.example.com", true, Some(with_home), &[]).await.status, StatusCode::OK);
+    let home = get(&app, "/").await.text();
+    assert!(home.contains("Who we are.") && home.contains("From the blog") && home.contains(r#""@type":"WebSite""#));
+    assert_eq!(get(&app, "/about/").await.headers["location"], "/");
+    assert!(!get(&app, "/sitemap.xml").await.text().contains("/about/"));
+
     // Deleting a post takes it off the site.
     send(&app, "DELETE", "admin", "/api/sites/blog.example.com/posts/one-server", true, None, &[]).await;
     assert_eq!(get(&app, "/one-server/").await.status, StatusCode::NOT_FOUND);
