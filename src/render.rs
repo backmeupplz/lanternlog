@@ -185,18 +185,18 @@ struct Head<'a> {
     ld: Value,
 }
 
-const CSS: &str = r#":root{--accent:ACCENT;--bg:#fff;--fg:#1d1d1f;--muted:#5f6368;--line:#e6e6e6;--soft:#f6f6f5}
-@media (prefers-color-scheme:dark){:root{--bg:#121316;--fg:#e8e8e9;--muted:#a3a7ad;--line:#2b2d31;--soft:#1c1d21}}
+const CSS: &str = r#":root{--accent:ACCENT;--link:ACCENT;--bg:#fff;--fg:#1d1d1f;--muted:#5f6368;--line:#e6e6e6;--soft:#f6f6f5}
+@media (prefers-color-scheme:dark){:root{--link:color-mix(in srgb,ACCENT 60%,#fff);--bg:#121316;--fg:#e8e8e9;--muted:#a3a7ad;--line:#2b2d31;--soft:#1c1d21}}
 *{box-sizing:border-box}html{-webkit-text-size-adjust:100%}
 body{margin:0;background:var(--bg);color:var(--fg);font:18px/1.7 system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif}
 .wrap{max-width:46rem;margin:0 auto;padding:0 1.25rem}
-a{color:var(--accent);text-underline-offset:.15em}
+a{color:var(--link);text-underline-offset:.15em}
 header.site{border-bottom:1px solid var(--line)}
 header.site .wrap{display:flex;gap:.5rem 1.25rem;align-items:center;justify-content:space-between;flex-wrap:wrap;padding-top:1rem;padding-bottom:1rem}
 .brand{font-weight:700;color:var(--fg);text-decoration:none}
 nav.top{display:flex;gap:1rem;flex-wrap:wrap;font-size:.95rem}
 nav.top a{color:var(--muted);text-decoration:none}
-nav.top a.project{color:var(--accent);font-weight:600}
+nav.top a.project{color:var(--link);font-weight:600}
 h1{font-size:2.3rem;line-height:1.2;margin:1.25rem 0 .75rem;letter-spacing:-.01em}
 h2{font-size:1.5rem;line-height:1.3;margin:2.2rem 0 .6rem}
 h3{font-size:1.2rem;line-height:1.35;margin:1.8rem 0 .5rem}
