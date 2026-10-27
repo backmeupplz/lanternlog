@@ -169,9 +169,21 @@ impl<'a> Ctx<'a> {
         };
         Some((label, &s.project_url))
     }
+    /// A brand image address as a full URL ("/media/x.png" becomes "https://host/media/x.png").
+    fn abs(&self, url: &str) -> String {
+        if url.starts_with('/') { format!("{}{url}", self.home) } else { url.to_string() }
+    }
+    /// The site's share image: its own if it set one, or the generated card.
+    fn site_image(&self) -> (String, bool) {
+        match self.site.og_image.as_str() {
+            "" => (format!("{}/og.png?v={}", self.home, self.site.updated_at), true),
+            own => (self.abs(own), false),
+        }
+    }
     fn publisher(&self) -> Value {
+        let logo = if self.site.logo.is_empty() { format!("{}/favicon.svg", self.home) } else { self.abs(&self.site.logo) };
         json!({"@type": "Organization", "name": self.site.title, "url": format!("{}/", self.home),
-               "logo": {"@type": "ImageObject", "url": format!("{}/favicon.svg", self.home)}})
+               "logo": {"@type": "ImageObject", "url": logo}})
     }
     fn author(&self) -> Value {
         let s = self.site;
@@ -189,6 +201,8 @@ struct Head<'a> {
     description: String,
     url: String,
     image: String,
+    /// Whether `image` is a generated 1200×630 card, whose size the tags can state.
+    card: bool,
     kind: &'static str,
     index: bool,
     published: Option<i64>,
@@ -214,7 +228,8 @@ fn layout(cx: &Ctx, head: Head, body: Markup) -> String {
                 meta name="color-scheme" content="light dark";
                 meta name="theme-color" media="(prefers-color-scheme: light)" content="#fbfaf7";
                 meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0f1012";
-                link rel="icon" href="/favicon.svg" type="image/svg+xml";
+                @if s.favicon.is_empty() && s.logo.is_empty() { link rel="icon" href="/favicon.svg" type="image/svg+xml"; }
+                @else { link rel="icon" href=(if s.favicon.is_empty() { &s.logo } else { &s.favicon }); }
                 link rel="alternate" type="application/atom+xml" title=(s.title) href="/feed.xml";
                 @if let Some(md) = &head.markdown { link rel="alternate" type="text/markdown" href=(md); }
                 meta property="og:type" content=(head.kind);
@@ -223,8 +238,7 @@ fn layout(cx: &Ctx, head: Head, body: Markup) -> String {
                 meta property="og:description" content=(head.description);
                 meta property="og:url" content=(head.url);
                 meta property="og:image" content=(head.image);
-                meta property="og:image:width" content="1200";
-                meta property="og:image:height" content="630";
+                @if head.card { meta property="og:image:width" content="1200"; meta property="og:image:height" content="630"; }
                 meta property="og:image:alt" content=(head.headline);
                 @if let Some(t) = head.published { meta property="article:published_time" content=(iso(t)); }
                 @if let Some(t) = head.modified { meta property="article:modified_time" content=(iso(t)); }
@@ -235,14 +249,20 @@ fn layout(cx: &Ctx, head: Head, body: Markup) -> String {
                 meta name="twitter:image" content=(head.image);
                 script type="application/ld+json" { (PreEscaped(ld)) }
                 script { (PreEscaped(style::HEAD_JS)) }
-                style { (PreEscaped(style::css(&s.accent))) }
+                style { (PreEscaped(style::css(&s.accent, s.font == "sans"))) }
+                (PreEscaped(&s.head))
             }
             body {
                 a.skip href="#main" { "Skip to content" }
                 header.top { div.wrap {
-                    a.brand href="/" { span.mark aria-hidden="true" { (initial(&s.title)) } (s.title) }
+                    a.brand href="/" {
+                        @if s.logo.is_empty() { span.mark aria-hidden="true" { (initial(&s.title)) } }
+                        @else { img.logo src=(s.logo) alt="" width="28" height="28"; }
+                        (s.title)
+                    }
                     nav.nav aria-label="Site" {
                         @for p in cx.pages() { a href=(format!("/{}/", p.slug)) { (p.title) } }
+                        @for l in &s.links { a href=(l.url) { (l.label) } }
                         @if let Some((label, url)) = cx.project() { a.project href=(url) { (label) " →" } }
                     }
                     button #theme .theme type="button" aria-label="Switch between light and dark themes" {
@@ -253,7 +273,8 @@ fn layout(cx: &Ctx, head: Head, body: Markup) -> String {
                 footer.foot { div.wrap {
                     p { strong { (s.title) } @if !s.description.is_empty() { ". " (s.description) } }
                     nav aria-label="Feeds" { a href="/feed.xml" { "Feed" } a href="/sitemap.xml" { "Sitemap" } a href="/llms.txt" { "llms.txt" } }
-                    p { "Published with " a href=(LANTERNLOG_URL) { "Lanternlog" } }
+                    @if !s.footer.is_empty() { p { (s.footer) } }
+                    @if s.credit { p { "Published with " a href=(LANTERNLOG_URL) { "Lanternlog" } } }
                 } }
                 script { (PreEscaped(style::TOGGLE_JS)) }
             }
@@ -300,7 +321,8 @@ pub fn index(cx: &Ctx) -> String {
         headline: home.map_or(&s.title, |p| &p.title),
         description,
         url: format!("{}/", cx.home),
-        image: format!("{}/og.png?v={}", cx.home, s.updated_at),
+        image: cx.site_image().0,
+        card: cx.site_image().1,
         kind: "website",
         index: true,
         published: None,
@@ -330,7 +352,10 @@ pub fn article(cx: &Ctx, p: &Post) -> String {
     let description = summary(p, &doc);
     let words = doc.text.split_whitespace().count();
     let page = p.kind == "page";
-    let image = format!("{}/og/{}.png?v={}", cx.home, p.slug, p.updated_at);
+    let (image, card) = match p.og_image.as_str() {
+        "" => (format!("{}/og/{}.png?v={}", cx.home, p.slug, p.updated_at), true),
+        own => (cx.abs(own), false),
+    };
     let mut thing = json!({
         "@type": if page { "WebPage" } else { "BlogPosting" }, "headline": p.title, "name": p.title, "description": description,
         "url": url, "mainEntityOfPage": url, "image": [image], "inLanguage": s.lang, "author": cx.author(), "publisher": cx.publisher(),
@@ -356,6 +381,7 @@ pub fn article(cx: &Ctx, p: &Post) -> String {
         description,
         url: url.clone(),
         image,
+        card,
         kind: "article",
         index: true,
         published: p.published_at.filter(|_| !page),
@@ -417,7 +443,8 @@ pub fn tag(cx: &Ctx, slug: &str) -> Option<String> {
         headline: &name,
         description: format!("Posts about {name} on {}.", s.title),
         url: url.clone(),
-        image: format!("{}/og.png?v={}", cx.home, s.updated_at),
+        image: cx.site_image().0,
+        card: cx.site_image().1,
         kind: "website",
         index: false,
         published: None,
@@ -437,7 +464,8 @@ pub fn not_found(cx: &Ctx) -> String {
         headline: "Not found",
         description: s.description.clone(),
         url: format!("{}/", cx.home),
-        image: format!("{}/og.png?v={}", cx.home, s.updated_at),
+        image: cx.site_image().0,
+        card: cx.site_image().1,
         kind: "website",
         index: false,
         published: None,

@@ -67,6 +67,7 @@ a:hover{text-decoration-thickness:2px}
 .top{border-bottom:1px solid var(--line)}
 .top .wrap{display:flex;align-items:center;flex-wrap:wrap;gap:.5rem 1.25rem;min-height:4rem;padding-top:.6rem;padding-bottom:.6rem}
 .brand{display:flex;align-items:center;gap:.6rem;margin-right:auto;color:var(--fg);text-decoration:none;font-weight:700;letter-spacing:-.01em}
+.logo{width:1.75rem;height:1.75rem;object-fit:contain;border-radius:.4rem}
 .mark{display:grid;place-items:center;width:1.65rem;height:1.65rem;border-radius:.5rem;background:var(--button);color:#fff;font-size:.9rem;font-weight:800}
 .nav{display:flex;align-items:center;flex-wrap:wrap;gap:.25rem 1.1rem;font-size:.95rem}
 .nav a{color:var(--muted);text-decoration:none;padding:.4rem 0}
@@ -95,6 +96,7 @@ h1{font-size:clamp(2rem,1.35rem + 2.6vw,2.85rem);line-height:1.1;letter-spacing:
 .prose table{display:block;width:100%;overflow-x:auto;border-collapse:collapse;margin:1.8rem 0;font:.95rem/1.5 var(--sans)}
 .prose th,.prose td{padding:.6rem .8rem;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
 .prose th{font-weight:650;border-bottom-width:2px}
+.prose td code{overflow-wrap:break-word}.prose td:first-child code{overflow-wrap:anywhere}
 .prose .button{font-size:1rem}
 code{font-family:var(--mono);font-size:.86em}
 :not(pre)>code{padding:.12em .38em;border-radius:6px;background:var(--soft)}
@@ -140,11 +142,12 @@ h2:hover>.anchor,h3:hover>.anchor{opacity:1}
 .foot strong{color:var(--fg)}
 .foot nav{display:flex;flex-wrap:wrap;gap:.4rem 1.1rem}
 .foot a{color:var(--muted)}
-@media (max-width:640px){.nav{order:3;width:100%;gap:.25rem 1rem}main.wrap{padding-top:1.75rem}.prose{font-size:1.1rem;line-height:1.68}.lead,.dek{font-size:1.15rem}.posts h2,.posts h3{font-size:1.25rem}}"#;
+@media (max-width:640px){.nav{order:3;width:100%;gap:.25rem 1rem}.prose table{font-size:.86rem}.prose th,.prose td{padding:.5rem .55rem}main.wrap{padding-top:1.75rem}.prose{font-size:1.1rem;line-height:1.68}.lead,.dek{font-size:1.15rem}.posts h2,.posts h3{font-size:1.25rem}}"#;
 
-pub fn css(accent: &str) -> String {
+pub fn css(accent: &str, sans: bool) -> String {
     let (light, dark) = links(accent);
-    CSS.replace("DARK", &DARK.replace("LINK_DARK", &dark)).replace("LINK_LIGHT", &light).replace("ACCENT", accent)
+    let css = CSS.replace("DARK", &DARK.replace("LINK_DARK", &dark)).replace("LINK_LIGHT", &light).replace("ACCENT", accent);
+    if sans { css + "\n:root{--serif:var(--sans)}" } else { css }
 }
 
 /// Runs before the first paint, so a reader who picked a theme never sees the other one flash.

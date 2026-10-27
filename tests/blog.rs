@@ -164,6 +164,35 @@ async fn a_blog_from_creation_to_every_file_it_serves() {
     assert_eq!(get(&app, "/about/").await.headers["location"], "/");
     assert!(!get(&app, "/sitemap.xml").await.text().contains("/about/"));
 
+    // White-label settings: the blog's own logo (drawn into share cards too), share image, links, head tags,
+    // footer and font, without the Lanternlog credit.
+    let mut brand = site.clone();
+    brand["logo"] = json!(path.clone());
+    brand["og_image"] = json!("https://cdn.example.com/share.png");
+    brand["links"] = json!([{"label": "Pricing", "url": "https://example.com/pricing"}]);
+    brand["head"] = json!(r#"<meta name="google-site-verification" content="abc123">"#);
+    brand["footer"] = json!("© 2026 Example Inc.");
+    brand["credit"] = json!(false);
+    brand["font"] = json!("sans");
+    let r = send(&app, "PUT", "admin", "/api/sites/blog.example.com", true, Some(brand.clone()), &[]).await;
+    assert_eq!(r.status, StatusCode::OK, "{}", r.text());
+    let home = get(&app, "/").await.text();
+    for needle in [r#"class="logo""#, r#"property="og:image" content="https://cdn.example.com/share.png""#, ">Pricing</a>",
+        "google-site-verification", "© 2026 Example Inc.", "--serif:var(--sans)", &format!(r#"rel="icon" href="{path}""#)] {
+        assert!(home.contains(needle), "branded home lacks {needle}");
+    }
+    assert!(!home.contains("Published with") && !home.contains("og:image:width"));
+    let branded = get(&app, "/og/one-server.png").await;
+    assert!(branded.body.starts_with(b"\x89PNG") && branded.body != card.body);
+    let own = json!({"title": "Moving to one server", "body": body, "status": "published", "og_image": "/media/own.png"});
+    send(&app, "PUT", "admin", "/api/sites/blog.example.com/posts/one-server", true, Some(own), &[]).await;
+    assert!(get(&app, "/one-server/").await.text().contains(r#"property="og:image" content="https://blog.example.com/media/own.png""#));
+    for (field, value) in [("font", json!("comic")), ("links", json!([{"label": "x", "url": "javascript:alert(1)"}]))] {
+        let mut bad = brand.clone();
+        bad[field] = value;
+        assert_eq!(send(&app, "PUT", "admin", "/api/sites/blog.example.com", true, Some(bad), &[]).await.status, StatusCode::BAD_REQUEST);
+    }
+
     // Deleting a post takes it off the site.
     send(&app, "DELETE", "admin", "/api/sites/blog.example.com/posts/one-server", true, None, &[]).await;
     assert_eq!(get(&app, "/one-server/").await.status, StatusCode::NOT_FOUND);

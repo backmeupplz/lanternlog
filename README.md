@@ -12,7 +12,9 @@ Lanternlog is one small server that hosts many blogs, each on its own domain, an
 - **IndexNow.** Each blog has its own key, and publishing a post tells Bing, Yandex and the other IndexNow engines about it within seconds. Google reads the sitemap.
 - **An outline for long posts.** Headings get stable ids, and posts with three or more get a table of contents.
 - **A way back to your product.** Each blog names the project it writes about, and every post ends with a call to action that links to it.
-- **Speed.** Pages are rendered once and served from memory, gzipped and with ETags, until the next write.
+- **Speed.** Pages are rendered once and served from memory, gzipped and with ETags, until the next write. Lighthouse scores 100 for performance, accessibility, best practices and SEO.
+- **Made for reading.** A book-style serif for posts, light and dark themes with a toggle that remembers the reader's choice, and link colors adjusted to stay readable whatever accent a blog picks.
+- **Your own brand.** Each blog can set its logo (drawn into its share cards too), favicon, share image, header links, head tags, footer text and font, and drop the Lanternlog credit.
 
 ## Run it
 
@@ -73,7 +75,7 @@ curl -X PUT https://blog.example.com/api/sites/blog.example.com/posts/one-server
   }'
 ```
 
-The answer holds the post's address. Set `"kind": "page"` for pages such as About: they appear in the header instead of the post list and the feed. To give a blog a front page of its own, publish a page and set the blog's `"home"` to its slug; the page then shows at `/`, with the latest posts below it.
+The answer holds the post's address. Set `"kind": "page"` for pages such as About: they appear in the header instead of the post list and the feed. To give a blog a front page of its own, publish a page and set the blog's `"home"` to its slug; the page then shows at `/`, with the latest posts below it. The [docs](https://lanternlog.com/docs/) list every setting, including the branding ones (`logo`, `favicon`, `og_image`, `links`, `head`, `footer`, `font` and `credit`).
 
 | Call | What it does |
 |---|---|

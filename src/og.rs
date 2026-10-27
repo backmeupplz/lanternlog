@@ -69,6 +69,8 @@ pub struct Card<'a> {
     pub host: &'a str,
     pub meta: &'a str,
     pub accent: &'a str,
+    /// The site's logo as a data URI, drawn in place of its initial.
+    pub logo: Option<&'a str>,
 }
 
 pub fn svg(c: &Card) -> String {
@@ -100,6 +102,15 @@ pub fn svg(c: &Card) -> String {
         .map_or("#ffffff", |a| if crate::style::contrast(a, [255.0; 3]) >= 2.5 { "#ffffff" } else { "#111214" });
     let initial: String = c.site.chars().find(|ch| ch.is_alphanumeric()).map(|ch| ch.to_uppercase().collect()).unwrap_or_default();
     let name = if c.site == c.title { String::new() } else { esc(c.site) };
+    let mark = match c.logo {
+        Some(data) => format!("<image x=\"80\" y=\"78\" width=\"52\" height=\"52\" preserveAspectRatio=\"xMidYMid meet\" href=\"{data}\"/>"),
+        None => format!(
+            "<rect x=\"80\" y=\"78\" width=\"52\" height=\"52\" rx=\"14\" fill=\"{}\"/><text x=\"106\" y=\"115\" text-anchor=\"middle\" \
+             font-family=\"{FONT}\" font-size=\"30\" font-weight=\"800\" fill=\"{mark_text}\">{}</text>",
+            esc(c.accent),
+            esc(&initial)
+        ),
+    };
     format!(
         "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"1200\" height=\"630\" viewBox=\"0 0 1200 630\"><defs>\
          <linearGradient id=\"bg\" x1=\"0\" y1=\"0\" x2=\"1\" y2=\"1\"><stop offset=\"0\" stop-color=\"#16181c\"/><stop offset=\"1\" stop-color=\"#0b0c0e\"/></linearGradient>\
@@ -108,8 +119,7 @@ pub fn svg(c: &Card) -> String {
          <radialGradient id=\"low\" cx=\"60\" cy=\"660\" r=\"440\" gradientUnits=\"userSpaceOnUse\"><stop offset=\"0\" stop-color=\"{accent}\" stop-opacity=\".13\"/>\
          <stop offset=\"1\" stop-color=\"{accent}\" stop-opacity=\"0\"/></radialGradient></defs>\
          <rect width=\"1200\" height=\"630\" fill=\"url(#bg)\"/><rect width=\"1200\" height=\"630\" fill=\"url(#glow)\"/><rect width=\"1200\" height=\"630\" fill=\"url(#low)\"/>\
-         <rect x=\"80\" y=\"78\" width=\"52\" height=\"52\" rx=\"14\" fill=\"{accent}\"/>\
-         <text x=\"106\" y=\"115\" text-anchor=\"middle\" font-family=\"{FONT}\" font-size=\"30\" font-weight=\"800\" fill=\"{mark_text}\">{initial}</text>\
+         {mark}\
          <text x=\"150\" y=\"114\" font-family=\"{FONT}\" font-size=\"30\" font-weight=\"600\" fill=\"#e8e7e4\">{name}</text>\
          <text x=\"80\" y=\"{first}\" font-family=\"{FONT}\" font-size=\"{size}\" font-weight=\"800\" letter-spacing=\"{spacing}\" fill=\"#ffffff\">{text}</text>\
          <text x=\"80\" y=\"{sub_y}\" font-family=\"{FONT}\" font-size=\"32\" fill=\"#b8bbc1\">{subtitle}</text>\
@@ -120,7 +130,6 @@ pub fn svg(c: &Card) -> String {
         spacing = -(size as f32) * 0.02,
         host = esc(c.host),
         meta = esc(c.meta),
-        initial = esc(&initial),
     )
 }
 

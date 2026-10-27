@@ -58,6 +58,23 @@ curl -X PUT https://blog.example.com/api/sites/blog.example.com \
 | `lang` | The language tag of the blog, such as `en` or `pt-BR` |
 | `home` | The slug of a page to show at `/` instead of the plain list of posts, with the latest posts below it |
 
+### Your own brand
+
+A blog can look like your product rather than like Lanternlog. All of these are optional.
+
+| Field | What it does |
+|---|---|
+| `logo` | An image shown next to the blog's name in the header and drawn into every share card. Upload it with the media call first, as a PNG, JPEG or GIF, so the cards can use it |
+| `favicon` | The browser icon; without one, the logo is used, and without a logo, a generated icon |
+| `og_image` | The share image for the home page and other pages without their own; without one, Lanternlog draws a card |
+| `links` | Up to 8 header links, such as `[{"label": "Pricing", "url": "https://example.com/pricing"}]` |
+| `head` | HTML added to every page's head, such as a search console verification tag or an analytics snippet |
+| `footer` | A line of text for the footer, such as a copyright notice |
+| `font` | `serif` (the default) or `sans` for the text of posts |
+| `credit` | `false` removes "Published with Lanternlog" from the footer |
+
+A post can also set `og_image` to use a share image of its own instead of the generated card.
+
 ## Publish posts and pages
 
 ```sh
@@ -71,7 +88,7 @@ curl -X PUT https://blog.example.com/api/sites/blog.example.com/posts/one-server
   }'
 ```
 
-The slug comes from the address. A post stays a draft until its `status` is `published`, and its first publication date is kept when you edit it later. Set `"kind": "page"` for pages such as About: they appear in the header rather than in the post list and the feed. `cover` takes an image address shown at the top of the post.
+The slug comes from the address. A post stays a draft until its `status` is `published`, and its first publication date is kept when you edit it later. Set `"kind": "page"` for pages such as About: they appear in the header rather than in the post list and the feed. `cover` takes an image address shown at the top of the post, and `og_image` replaces the post's generated share card.
 
 Posts are Markdown with tables, footnotes, task lists, smart quotes and heading ids (`## Setup {#setup}`). Raw HTML passes through untouched, so only give the token to writers you trust.
 

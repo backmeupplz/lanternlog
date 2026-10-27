@@ -123,6 +123,28 @@ async fn put_site(_: Admin, State(app): State<Arc<App>>, Path(host): Path<String
     if !s.home.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-') {
         return Err(bad("home is the slug of one of the site's pages"));
     }
+    for (field, value) in [("logo", &s.logo), ("favicon", &s.favicon), ("og_image", &s.og_image)] {
+        check_url(field, value, true)?;
+    }
+    if s.font.is_empty() {
+        s.font = "serif".into();
+    }
+    if !["serif", "sans"].contains(&s.font.as_str()) {
+        return Err(bad("font is serif or sans"));
+    }
+    if s.links.len() > 8 {
+        return Err(bad("a site has at most 8 header links"));
+    }
+    for l in &mut s.links {
+        l.label = l.label.trim().to_string();
+        if l.label.is_empty() || l.label.chars().count() > 40 {
+            return Err(bad("link labels are 1 to 40 characters"));
+        }
+        check_url("links", &l.url, true)?;
+    }
+    if s.head.len() > 20_000 || s.footer.chars().count() > 500 {
+        return Err(bad("head is at most 20,000 bytes and footer at most 500 characters"));
+    }
     check_url("project_url", &s.project_url, false)?;
     check_url("author_url", &s.author_url, false)?;
     s.updated_at = now();
@@ -179,6 +201,7 @@ async fn put_post(
         return Err(bad("kind is post or page, and status is draft or published"));
     }
     check_url("cover", &p.cover, true)?;
+    check_url("og_image", &p.og_image, true)?;
     let mut tags: Vec<String> = Vec::new();
     for t in p.tags.iter().map(|t| t.trim()).filter(|t| !t.is_empty() && t.len() <= 50) {
         if !tags.iter().any(|x| x.eq_ignore_ascii_case(t)) && tags.len() < 20 {

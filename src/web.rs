@@ -137,7 +137,8 @@ fn build(app: &App, host: &str, path: &str) -> Result<Cached, Box<Response<Body>
     let html = |s: String| Cached::new("text/html; charset=utf-8", s, 60);
     let text = |s: String| Cached::new("text/plain; charset=utf-8", s, 300);
     let card = |title: &str, subtitle: &str, meta: &str| {
-        let c = og::Card { site: &site.title, title, subtitle, host: &site.host, meta, accent: &site.accent };
+        let logo = embedded(app, &site, &site.logo);
+        let c = og::Card { site: &site.title, title, subtitle, host: &site.host, meta, accent: &site.accent, logo: logo.as_deref() };
         og::png(&og::svg(&c))
             .map(|png| Cached::new("image/png", png, 86_400))
             .map_err(|e| Box::new(plain(StatusCode::INTERNAL_SERVER_ERROR, &e.to_string())))
@@ -188,6 +189,24 @@ fn build(app: &App, host: &str, path: &str) -> Result<Cached, Box<Response<Body>
         None if find(rest).is_some() => Err(Box::new(redirect(&format!("/{rest}/")))),
         None => Err(missing()),
     }
+}
+
+/// One of the site's uploaded PNG, JPEG or GIF images as a data URI, to draw into its share cards.
+fn embedded(app: &App, site: &db::Site, url: &str) -> Option<String> {
+    use base64::Engine;
+    let path = ["https://", "http://"].iter().find_map(|s| url.strip_prefix(&format!("{s}{}", site.host))).unwrap_or(url);
+    let (name, ext) = path.strip_prefix("/media/")?.rsplit_once('.')?;
+    let mime = match ext {
+        "png" => "png",
+        "jpg" => "jpeg",
+        "gif" => "gif",
+        _ => return None,
+    };
+    if !name.bytes().all(|b| b.is_ascii_hexdigit() || b == b'-') {
+        return None;
+    }
+    let bytes = std::fs::read(app.data.join("media").join(&site.host).join(format!("{name}.{ext}"))).ok()?;
+    Some(format!("data:image/{mime};base64,{}", base64::engine::general_purpose::STANDARD.encode(bytes)))
 }
 
 /// Uploaded images, named by their content, so they never change.

@@ -58,6 +58,18 @@ pub struct Site {
     pub accent: String,
     /// The slug of a page to show as the home page, above the latest posts.
     pub home: String,
+    /// The brand, for blogs that shouldn't look like Lanternlog: a logo in place of the initial, a favicon,
+    /// a share image for pages without their own, header links, tags for the head, footer text, the font
+    /// for posts ("serif" or "sans") and whether the footer credits Lanternlog.
+    pub logo: String,
+    pub favicon: String,
+    pub og_image: String,
+    pub links: Vec<Link>,
+    pub head: String,
+    pub footer: String,
+    pub font: String,
+    #[serde(default = "yes")]
+    pub credit: bool,
     #[serde(skip_deserializing)]
     pub indexnow_key: String,
     #[serde(skip_deserializing)]
@@ -76,16 +88,47 @@ pub struct Post {
     pub body: String,
     pub tags: Vec<String>,
     pub cover: String,
+    /// A share image of its own instead of the generated card.
+    pub og_image: String,
     pub status: String,
     pub published_at: Option<i64>,
     #[serde(skip_deserializing)]
     pub updated_at: i64,
 }
 
+/// Columns added after the first release, so older databases gain them on start.
+const COLUMNS: &[(&str, &str, &str)] = &[
+    ("sites", "logo", "TEXT NOT NULL DEFAULT ''"),
+    ("sites", "favicon", "TEXT NOT NULL DEFAULT ''"),
+    ("sites", "og_image", "TEXT NOT NULL DEFAULT ''"),
+    ("sites", "font", "TEXT NOT NULL DEFAULT 'serif'"),
+    ("sites", "links", "TEXT NOT NULL DEFAULT '[]'"),
+    ("sites", "head", "TEXT NOT NULL DEFAULT ''"),
+    ("sites", "footer", "TEXT NOT NULL DEFAULT ''"),
+    ("sites", "credit", "INTEGER NOT NULL DEFAULT 1"),
+    ("posts", "og_image", "TEXT NOT NULL DEFAULT ''"),
+];
+
 pub fn open(path: &std::path::Path) -> rusqlite::Result<Connection> {
     let c = Connection::open(path)?;
     c.execute_batch(SCHEMA)?;
+    for (table, column, kind) in COLUMNS {
+        if !c.prepare(&format!("SELECT 1 FROM pragma_table_info('{table}') WHERE name = ?1"))?.exists([column])? {
+            c.execute_batch(&format!("ALTER TABLE {table} ADD COLUMN {column} {kind}"))?;
+        }
+    }
     Ok(c)
+}
+
+fn yes() -> bool {
+    true
+}
+
+/// A link in a blog's header, such as the product's pricing page.
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct Link {
+    pub label: String,
+    pub url: String,
 }
 
 fn json<T: for<'de> Deserialize<'de> + Default>(s: String) -> T {
@@ -106,6 +149,14 @@ fn site_row(r: &Row) -> rusqlite::Result<Site> {
         cta: r.get("cta")?,
         accent: r.get("accent")?,
         home: r.get("home")?,
+        logo: r.get("logo")?,
+        favicon: r.get("favicon")?,
+        og_image: r.get("og_image")?,
+        links: json(r.get("links")?),
+        head: r.get("head")?,
+        footer: r.get("footer")?,
+        font: r.get("font")?,
+        credit: r.get("credit")?,
         indexnow_key: r.get("indexnow_key")?,
         updated_at: r.get("updated_at")?,
     })
@@ -120,6 +171,7 @@ fn post_row(r: &Row) -> rusqlite::Result<Post> {
         body: r.get("body")?,
         tags: json(r.get("tags")?),
         cover: r.get("cover")?,
+        og_image: r.get("og_image")?,
         status: r.get("status")?,
         published_at: r.get("published_at")?,
         updated_at: r.get("updated_at")?,
@@ -143,10 +195,12 @@ pub fn sites(c: &Connection) -> rusqlite::Result<Vec<Site>> {
 pub fn put_site(c: &Connection, s: &Site) -> rusqlite::Result<()> {
     let key = format!("{:032x}", rand::random::<u128>());
     c.execute(
-        "INSERT INTO sites (host, aliases, title, description, lang, author, author_url, project_name, project_url, cta, accent, home, indexnow_key, updated_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)
+        "INSERT INTO sites (host, aliases, title, description, lang, author, author_url, project_name, project_url, cta, accent, home,
+           logo, favicon, og_image, links, head, footer, font, credit, indexnow_key, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22)
          ON CONFLICT (host) DO UPDATE SET aliases = ?2, title = ?3, description = ?4, lang = ?5, author = ?6, author_url = ?7,
-           project_name = ?8, project_url = ?9, cta = ?10, accent = ?11, home = ?12, updated_at = ?14",
+           project_name = ?8, project_url = ?9, cta = ?10, accent = ?11, home = ?12, logo = ?13, favicon = ?14, og_image = ?15,
+           links = ?16, head = ?17, footer = ?18, font = ?19, credit = ?20, updated_at = ?22",
         params![
             s.host,
             serde_json::to_string(&s.aliases).unwrap_or_default(),
@@ -160,6 +214,14 @@ pub fn put_site(c: &Connection, s: &Site) -> rusqlite::Result<()> {
             s.cta,
             s.accent,
             s.home,
+            s.logo,
+            s.favicon,
+            s.og_image,
+            serde_json::to_string(&s.links).unwrap_or_default(),
+            s.head,
+            s.footer,
+            s.font,
+            s.credit,
             key,
             s.updated_at
         ],
@@ -187,10 +249,10 @@ pub fn post(c: &Connection, host: &str, slug: &str) -> rusqlite::Result<Option<P
 
 pub fn put_post(c: &Connection, host: &str, p: &Post) -> rusqlite::Result<()> {
     c.execute(
-        "INSERT INTO posts (host, slug, kind, title, description, body, tags, cover, status, published_at, updated_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)
+        "INSERT INTO posts (host, slug, kind, title, description, body, tags, cover, status, published_at, updated_at, og_image)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)
          ON CONFLICT (host, slug) DO UPDATE SET kind = ?3, title = ?4, description = ?5, body = ?6, tags = ?7, cover = ?8,
-           status = ?9, published_at = ?10, updated_at = ?11",
+           status = ?9, published_at = ?10, updated_at = ?11, og_image = ?12",
         params![
             host,
             p.slug,
@@ -202,7 +264,8 @@ pub fn put_post(c: &Connection, host: &str, p: &Post) -> rusqlite::Result<()> {
             p.cover,
             p.status,
             p.published_at,
-            p.updated_at
+            p.updated_at,
+            p.og_image
         ],
     )?;
     Ok(())
