@@ -90,6 +90,10 @@ Posts are Markdown with tables, footnotes, task lists and heading ids (`## Setup
 
 Lanternlog has no web editor, comments, newsletters or themes beyond an accent color. Posts come in through the API, and anything that needs a browser is meant to live on your product's own site.
 
+## This project's website
+
+lanternlog.com runs on Lanternlog. Its pages are in `site/`, and `site/publish.py` publishes them through the API.
+
 ## License
 
 MIT
