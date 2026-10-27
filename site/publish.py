@@ -34,6 +34,13 @@ pages = {
     "docs": {"title": "Docs", "description": "How to install Lanternlog, create blogs on it and publish posts through its API.",
              "body": (HERE / "docs.md").read_text(), "kind": "page", "status": "published"},
 }
+req = urllib.request.Request(API + "/media", data=(HERE / "logo.png").read_bytes(), method="POST",
+                             headers={"Authorization": "Bearer " + os.environ["KEY"].strip(), "Content-Type": "image/png"})
+try:
+    with urllib.request.urlopen(req, timeout=60) as r:  # images are stored by content, so this is safe to repeat
+        site["logo"] = "/media/" + json.load(r)["url"].rsplit("/media/", 1)[1]
+except urllib.error.HTTPError as e:
+    print("logo", e.code)
 for slug, page in pages.items():  # pages first, so the home setting points at a page that exists
     st, r = put(f"/posts/{slug}", page)
     print("page", slug, st, r.get("url") or r)
