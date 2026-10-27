@@ -4,6 +4,7 @@ pub mod api;
 pub mod db;
 pub mod og;
 pub mod render;
+pub mod style;
 pub mod web;
 
 use axum::{Router, http::StatusCode};

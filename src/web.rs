@@ -136,8 +136,9 @@ fn build(app: &App, host: &str, path: &str) -> Result<Cached, Box<Response<Body>
     let cx = render::Ctx::new(&site, &app.scheme, &posts);
     let html = |s: String| Cached::new("text/html; charset=utf-8", s, 60);
     let text = |s: String| Cached::new("text/plain; charset=utf-8", s, 300);
-    let card = |title: &str| {
-        og::png(&og::svg(&site.title, title, &site.host, &site.accent))
+    let card = |title: &str, subtitle: &str, meta: &str| {
+        let c = og::Card { site: &site.title, title, subtitle, host: &site.host, meta, accent: &site.accent };
+        og::png(&og::svg(&c))
             .map(|png| Cached::new("image/png", png, 86_400))
             .map_err(|e| Box::new(plain(StatusCode::INTERNAL_SERVER_ERROR, &e.to_string())))
     };
@@ -157,12 +158,12 @@ fn build(app: &App, host: &str, path: &str) -> Result<Cached, Box<Response<Body>
         "/llms-full.txt" => return Ok(text(render::llms_full(&cx))),
         "/favicon.svg" => return Ok(Cached::new("image/svg+xml", render::favicon(&site), 86_400)),
         "/favicon.ico" => return Err(Box::new(redirect("/favicon.svg"))),
-        "/og.png" => return card(&site.description).or_else(|_| card(&site.title)),
+        "/og.png" => return card(&site.title, &site.description, ""),
         _ => {}
     }
     let rest = &path[1..];
     if let Some(slug) = rest.strip_prefix("og/").and_then(|r| r.strip_suffix(".png")) {
-        return find(slug).map_or_else(|| Err(missing()), |p| card(&p.title));
+        return find(slug).map_or_else(|| Err(missing()), |p| card(&p.title, "", &render::card_meta(p)));
     }
     if let Some(file) = rest.strip_prefix("media/") {
         return Err(Box::new(media(app, &site.host, file)));

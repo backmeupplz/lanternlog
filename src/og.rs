@@ -47,7 +47,7 @@ fn wrap(text: &str, width: usize) -> Vec<String> {
 /// The biggest type size at which the title fits, with its lines. Widths assume wide bold letters, so text
 /// never reaches the edges.
 fn fit(title: &str) -> (u32, Vec<String>) {
-    for (size, width, max) in [(72, 22, 3), (60, 27, 4), (50, 33, 5)] {
+    for (size, width, max) in [(80, 20, 3), (68, 24, 3), (58, 28, 4), (50, 33, 5)] {
         let lines = wrap(title, width);
         if lines.len() <= max {
             return (size, lines);
@@ -61,24 +61,66 @@ fn fit(title: &str) -> (u32, Vec<String>) {
     (50, lines)
 }
 
-pub fn svg(site: &str, title: &str, host: &str, accent: &str) -> String {
-    let (size, lines) = fit(title);
-    let family = "Inter, DejaVu Sans, Helvetica, Arial, sans-serif";
-    let mut tspans = String::new();
-    for (i, line) in lines.iter().enumerate() {
-        let dy = if i == 0 { 0 } else { size * 6 / 5 };
-        tspans += &format!("<tspan x=\"80\" dy=\"{dy}\">{}</tspan>", esc(line));
+/// What a share card shows. The site's name sits at the top unless the card is the site's own.
+pub struct Card<'a> {
+    pub site: &'a str,
+    pub title: &'a str,
+    pub subtitle: &'a str,
+    pub host: &'a str,
+    pub meta: &'a str,
+    pub accent: &'a str,
+}
+
+pub fn svg(c: &Card) -> String {
+    const FONT: &str = "Inter, DejaVu Sans, Helvetica, Arial, sans-serif";
+    let (size, lines) = fit(c.title);
+    let mut sub = wrap(c.subtitle, 56);
+    if sub.len() > 2 {
+        sub.truncate(2);
+        if let Some(last) = sub.last_mut() {
+            last.push('…');
+        }
     }
+    let line = size * 114 / 100;
+    let mut height = size + line * (lines.len() as u32 - 1);
+    if !sub.is_empty() {
+        height += 30 + 32 + 44 * (sub.len() as u32 - 1);
+    }
+    let first = 170 + 320u32.saturating_sub(height) / 2 + size * 78 / 100;
+    let mut text = String::new();
+    for (i, l) in lines.iter().enumerate() {
+        text += &format!("<tspan x=\"80\" dy=\"{}\">{}</tspan>", if i == 0 { 0 } else { line }, esc(l));
+    }
+    let mut subtitle = String::new();
+    for (i, l) in sub.iter().enumerate() {
+        subtitle += &format!("<tspan x=\"80\" dy=\"{}\">{}</tspan>", if i == 0 { 0 } else { 44 }, esc(l));
+    }
+    let sub_y = first + line * (lines.len() as u32 - 1) + 30 + 32;
+    let mark_text = crate::style::rgb(c.accent)
+        .map_or("#ffffff", |a| if crate::style::contrast(a, [255.0; 3]) >= 2.5 { "#ffffff" } else { "#111214" });
+    let initial: String = c.site.chars().find(|ch| ch.is_alphanumeric()).map(|ch| ch.to_uppercase().collect()).unwrap_or_default();
+    let name = if c.site == c.title { String::new() } else { esc(c.site) };
     format!(
-        "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"1200\" height=\"630\" viewBox=\"0 0 1200 630\">\
-         <rect width=\"1200\" height=\"630\" fill=\"#111316\"/><rect width=\"1200\" height=\"14\" fill=\"{accent}\"/>\
-         <circle cx=\"1130\" cy=\"560\" r=\"170\" fill=\"{accent}\" opacity=\"0.16\"/>\
-         <text x=\"80\" y=\"128\" font-family=\"{family}\" font-size=\"34\" font-weight=\"700\" fill=\"{accent}\">{site}</text>\
-         <text x=\"80\" y=\"{y}\" font-family=\"{family}\" font-size=\"{size}\" font-weight=\"700\" fill=\"#f4f4f5\">{tspans}</text>\
-         <text x=\"80\" y=\"566\" font-family=\"{family}\" font-size=\"28\" fill=\"#a1a1aa\">{host}</text></svg>",
-        site = esc(site),
-        host = esc(host),
-        y = 200 + size,
+        "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"1200\" height=\"630\" viewBox=\"0 0 1200 630\"><defs>\
+         <linearGradient id=\"bg\" x1=\"0\" y1=\"0\" x2=\"1\" y2=\"1\"><stop offset=\"0\" stop-color=\"#16181c\"/><stop offset=\"1\" stop-color=\"#0b0c0e\"/></linearGradient>\
+         <radialGradient id=\"glow\" cx=\"1050\" cy=\"70\" r=\"600\" gradientUnits=\"userSpaceOnUse\"><stop offset=\"0\" stop-color=\"{accent}\" stop-opacity=\".5\"/>\
+         <stop offset=\".5\" stop-color=\"{accent}\" stop-opacity=\".12\"/><stop offset=\"1\" stop-color=\"{accent}\" stop-opacity=\"0\"/></radialGradient>\
+         <radialGradient id=\"low\" cx=\"60\" cy=\"660\" r=\"440\" gradientUnits=\"userSpaceOnUse\"><stop offset=\"0\" stop-color=\"{accent}\" stop-opacity=\".13\"/>\
+         <stop offset=\"1\" stop-color=\"{accent}\" stop-opacity=\"0\"/></radialGradient></defs>\
+         <rect width=\"1200\" height=\"630\" fill=\"url(#bg)\"/><rect width=\"1200\" height=\"630\" fill=\"url(#glow)\"/><rect width=\"1200\" height=\"630\" fill=\"url(#low)\"/>\
+         <rect x=\"80\" y=\"78\" width=\"52\" height=\"52\" rx=\"14\" fill=\"{accent}\"/>\
+         <text x=\"106\" y=\"115\" text-anchor=\"middle\" font-family=\"{FONT}\" font-size=\"30\" font-weight=\"800\" fill=\"{mark_text}\">{initial}</text>\
+         <text x=\"150\" y=\"114\" font-family=\"{FONT}\" font-size=\"30\" font-weight=\"600\" fill=\"#e8e7e4\">{name}</text>\
+         <text x=\"80\" y=\"{first}\" font-family=\"{FONT}\" font-size=\"{size}\" font-weight=\"800\" letter-spacing=\"{spacing}\" fill=\"#ffffff\">{text}</text>\
+         <text x=\"80\" y=\"{sub_y}\" font-family=\"{FONT}\" font-size=\"32\" fill=\"#b8bbc1\">{subtitle}</text>\
+         <rect x=\"80\" y=\"514\" width=\"1040\" height=\"1\" fill=\"#ffffff\" fill-opacity=\".14\"/>\
+         <text x=\"80\" y=\"562\" font-family=\"{FONT}\" font-size=\"26\" font-weight=\"500\" fill=\"#a3a6ac\">{host}</text>\
+         <text x=\"1120\" y=\"562\" text-anchor=\"end\" font-family=\"{FONT}\" font-size=\"26\" fill=\"#a3a6ac\">{meta}</text></svg>",
+        accent = esc(c.accent),
+        spacing = -(size as f32) * 0.02,
+        host = esc(c.host),
+        meta = esc(c.meta),
+        initial = esc(&initial),
     )
 }
 
@@ -99,7 +141,7 @@ mod tests {
     fn titles_fit_inside_the_card() {
         assert_eq!(fit("Short").1, vec!["Short"]);
         let (size, lines) = fit("How we cut our deploy times from four minutes to forty seconds on a single Hetzner box");
-        assert!(size < 72 && lines.len() <= 5 && lines.iter().all(|l| l.chars().count() <= 33));
+        assert!(size < 80 && lines.len() <= 5 && lines.iter().all(|l| l.chars().count() <= 33));
         assert!(wrap("a-very-long-unbroken-identifier-that-keeps-going-forever", 22).iter().all(|l| l.chars().count() <= 22));
     }
 }

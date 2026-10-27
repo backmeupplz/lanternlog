@@ -1,6 +1,7 @@
 //! Pages, feeds and the files search engines and AI assistants read, made from a site and its posts.
 
 use crate::db::{Post, Site};
+use crate::style;
 use chrono::{DateTime, SecondsFormat};
 use maud::{DOCTYPE, Markup, PreEscaped, html};
 use pulldown_cmark::{CowStr, Event, HeadingLevel, Options, Parser, Tag, TagEnd};
@@ -59,8 +60,11 @@ pub fn markdown(md: &str) -> Doc {
                     if matches!(level, HeadingLevel::H2 | HeadingLevel::H3) {
                         toc.push((level as u8, id.clone(), label.trim().to_string()));
                     }
+                    let anchor = matches!(level, HeadingLevel::H2 | HeadingLevel::H3)
+                        .then(|| format!("<a class=\"anchor\" href=\"#{id}\" aria-hidden=\"true\" tabindex=\"-1\">#</a>"));
                     events.push(Event::Start(Tag::Heading { level, id: Some(id.into()), classes, attrs }));
                     events.extend(inner);
+                    events.extend(anchor.map(|a| Event::InlineHtml(a.into())));
                     events.push(Event::End(TagEnd::Heading(level)));
                 }
             }
@@ -72,7 +76,8 @@ pub fn markdown(md: &str) -> Doc {
     }
     let mut out = String::new();
     pulldown_cmark::html::push_html(&mut out, events.into_iter());
-    Doc { html: out, toc, text: text.split_whitespace().collect::<Vec<_>>().join(" ") }
+    let html = out.replace("<img src=", "<img loading=\"lazy\" decoding=\"async\" src=");
+    Doc { html, toc, text: text.split_whitespace().collect::<Vec<_>>().join(" ") }
 }
 
 /// Lowercase words joined by hyphens, for heading ids and tag addresses.
@@ -112,6 +117,14 @@ fn clip(s: &str, n: usize) -> String {
         t.truncate(i);
     }
     t.trim_end_matches(|c: char| !c.is_alphanumeric()).to_string() + "…"
+}
+
+/// "October 27, 2026 · 4 min read" for a post's share card; nothing for pages.
+pub fn card_meta(p: &Post) -> String {
+    match p.published_at {
+        Some(t) if p.kind != "page" => format!("{} · {} min read", day(t), (markdown(&p.body).text.split_whitespace().count() / 220).max(1)),
+        _ => String::new(),
+    }
 }
 
 /// The description a post gives, or the start of its text.
@@ -185,46 +198,6 @@ struct Head<'a> {
     ld: Value,
 }
 
-const CSS: &str = r#":root{--accent:ACCENT;--link:ACCENT;--bg:#fff;--fg:#1d1d1f;--muted:#5f6368;--line:#e6e6e6;--soft:#f6f6f5}
-@media (prefers-color-scheme:dark){:root{--link:color-mix(in srgb,ACCENT 60%,#fff);--bg:#121316;--fg:#e8e8e9;--muted:#a3a7ad;--line:#2b2d31;--soft:#1c1d21}}
-*{box-sizing:border-box}html{-webkit-text-size-adjust:100%}
-body{margin:0;background:var(--bg);color:var(--fg);font:18px/1.7 system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif}
-.wrap{max-width:46rem;margin:0 auto;padding:0 1.25rem}
-a{color:var(--link);text-underline-offset:.15em}
-header.site{border-bottom:1px solid var(--line)}
-header.site .wrap{display:flex;gap:.5rem 1.25rem;align-items:center;justify-content:space-between;flex-wrap:wrap;padding-top:1rem;padding-bottom:1rem}
-.brand{font-weight:700;color:var(--fg);text-decoration:none}
-nav.top{display:flex;gap:1rem;flex-wrap:wrap;font-size:.95rem}
-nav.top a{color:var(--muted);text-decoration:none}
-nav.top a.project{color:var(--link);font-weight:600}
-h1{font-size:2.3rem;line-height:1.2;margin:1.25rem 0 .75rem;letter-spacing:-.01em}
-h2{font-size:1.5rem;line-height:1.3;margin:2.2rem 0 .6rem}
-h3{font-size:1.2rem;line-height:1.35;margin:1.8rem 0 .5rem}
-.lead{font-size:1.2rem;color:var(--muted);margin-top:0}
-.meta,.crumbs{color:var(--muted);font-size:.9rem}
-.crumbs{margin-top:1.5rem}.crumbs a{color:var(--muted)}
-.toc{background:var(--soft);border-radius:10px;padding:.8rem 1.2rem;margin:1.5rem 0;font-size:.95rem}
-.toc p{margin:0 0 .3rem;font-weight:600}.toc ol{margin:0;padding-left:1.2rem}.toc .l3{margin-left:1rem;list-style:circle}
-img,video{max-width:100%;height:auto;border-radius:8px}
-pre{background:var(--soft);padding:1rem;overflow-x:auto;border-radius:10px;font-size:.85rem;line-height:1.5}
-code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:.9em}
-:not(pre)>code{background:var(--soft);padding:.1em .35em;border-radius:5px}
-blockquote{margin:1.5rem 0;padding:.2rem 1.2rem;border-left:3px solid var(--line);color:var(--muted)}
-table{border-collapse:collapse;display:block;overflow-x:auto;margin:1.5rem 0;font-size:.95rem}
-th,td{border:1px solid var(--line);padding:.45rem .7rem;text-align:left}
-hr{border:0;border-top:1px solid var(--line);margin:2.5rem 0}
-.tags a{margin-right:.75rem;font-size:.9rem}
-.cta{margin:3rem 0;padding:1.2rem 1.4rem;border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:10px;background:var(--soft)}
-.cta p{margin:0 0 .8rem}
-.button{display:inline-block;background:var(--accent);color:#fff;padding:.55rem 1rem;border-radius:8px;text-decoration:none;font-weight:600}
-ol.posts{list-style:none;padding:0;margin:1rem 0}
-ol.posts li{padding:1.2rem 0;border-bottom:1px solid var(--line)}
-ol.posts h2{margin:0 0 .3rem;font-size:1.35rem}ol.posts h2 a{color:var(--fg);text-decoration:none}
-ol.posts p{margin:.3rem 0 0;color:var(--muted)}ol.posts time{color:var(--muted);font-size:.85rem}
-footer{margin-top:4rem;border-top:1px solid var(--line);color:var(--muted);font-size:.85rem}
-footer .wrap{padding-top:1.5rem;padding-bottom:2.5rem}footer a{color:var(--muted)}
-@media (max-width:600px){body{font-size:17px}h1{font-size:1.85rem}}"#;
-
 fn layout(cx: &Ctx, head: Head, body: Markup) -> String {
     let s = cx.site;
     let ld = serde_json::to_string(&head.ld).unwrap_or_default().replace("</", "<\\/");
@@ -238,7 +211,9 @@ fn layout(cx: &Ctx, head: Head, body: Markup) -> String {
                 meta name="description" content=(head.description);
                 link rel="canonical" href=(head.url);
                 meta name="robots" content=(if head.index { "index, follow, max-image-preview:large" } else { "noindex, follow" });
-                meta name="theme-color" content=(s.accent);
+                meta name="color-scheme" content="light dark";
+                meta name="theme-color" media="(prefers-color-scheme: light)" content="#fbfaf7";
+                meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0f1012";
                 link rel="icon" href="/favicon.svg" type="image/svg+xml";
                 link rel="alternate" type="application/atom+xml" title=(s.title) href="/feed.xml";
                 @if let Some(md) = &head.markdown { link rel="alternate" type="text/markdown" href=(md); }
@@ -259,38 +234,50 @@ fn layout(cx: &Ctx, head: Head, body: Markup) -> String {
                 meta name="twitter:description" content=(head.description);
                 meta name="twitter:image" content=(head.image);
                 script type="application/ld+json" { (PreEscaped(ld)) }
-                style { (PreEscaped(CSS.replace("ACCENT", &s.accent))) }
+                script { (PreEscaped(style::HEAD_JS)) }
+                style { (PreEscaped(style::css(&s.accent))) }
             }
             body {
-                header.site { div.wrap {
-                    a.brand href="/" { (s.title) }
-                    nav.top {
+                a.skip href="#main" { "Skip to content" }
+                header.top { div.wrap {
+                    a.brand href="/" { span.mark aria-hidden="true" { (initial(&s.title)) } (s.title) }
+                    nav.nav aria-label="Site" {
                         @for p in cx.pages() { a href=(format!("/{}/", p.slug)) { (p.title) } }
                         @if let Some((label, url)) = cx.project() { a.project href=(url) { (label) " →" } }
                     }
+                    button #theme .theme type="button" aria-label="Switch between light and dark themes" {
+                        (PreEscaped(style::SUN)) (PreEscaped(style::MOON))
+                    }
                 } }
-                main.wrap { (body) }
-                footer { div.wrap {
-                    a href="/feed.xml" { "Feed" } " · " a href="/sitemap.xml" { "Sitemap" } " · " a href="/llms.txt" { "llms.txt" }
-                    " · Published with " a href=(LANTERNLOG_URL) { "Lanternlog" }
+                main #main .wrap { (body) }
+                footer.foot { div.wrap {
+                    p { strong { (s.title) } @if !s.description.is_empty() { ". " (s.description) } }
+                    nav aria-label="Feeds" { a href="/feed.xml" { "Feed" } a href="/sitemap.xml" { "Sitemap" } a href="/llms.txt" { "llms.txt" } }
+                    p { "Published with " a href=(LANTERNLOG_URL) { "Lanternlog" } }
                 } }
+                script { (PreEscaped(style::TOGGLE_JS)) }
             }
         }
     }
     .into_string()
 }
 
-fn list(posts: &[&Post]) -> Markup {
+fn list(posts: &[&Post], nested: bool) -> Markup {
     html! {
         ol.posts { @for p in posts {
             li { article {
-                h2 { a href=(format!("/{}/", p.slug)) { (p.title) } }
                 @if let Some(t) = p.published_at { time datetime=(iso(t)) { (day(t)) } }
+                @if nested { h3 { a href=(format!("/{}/", p.slug)) { (p.title) } } }
+                @else { h2 { a href=(format!("/{}/", p.slug)) { (p.title) } } }
                 p { (summary(p, &markdown(&p.body))) }
             } }
         } }
         @if posts.is_empty() { p { "Nothing has been published here yet." } }
     }
+}
+
+fn initial(title: &str) -> String {
+    title.chars().find(|c| c.is_alphanumeric()).map(|c| c.to_uppercase().collect()).unwrap_or_default()
 }
 
 pub fn index(cx: &Ctx) -> String {
@@ -325,12 +312,12 @@ pub fn index(cx: &Ctx) -> String {
     let body = html! {
         @if let (Some(p), Some(d)) = (home, &doc) {
             h1 { (p.title) }
-            (PreEscaped(&d.html))
-            @if !posts.is_empty() { h2 { "From the blog" } (list(&posts)) }
+            div.prose { (PreEscaped(&d.html)) }
+            @if !posts.is_empty() { h2.section { "From the blog" } (list(&posts, true)) }
         } @else {
             h1 { (s.title) }
             @if !s.description.is_empty() { p.lead { (s.description) } }
-            (list(&posts))
+            (list(&posts, false))
         }
     };
     layout(cx, head, body)
@@ -378,30 +365,32 @@ pub fn article(cx: &Ctx, p: &Post) -> String {
         ld,
     };
     let body = html! {
-        nav.crumbs aria-label="Breadcrumb" { a href="/" { (s.title) } " › " (p.title) }
+        @if !page { div.progress aria-hidden="true" {} }
+        nav.crumbs aria-label="Breadcrumb" { a href="/" { "← " (s.title) } }
         article {
             h1 { (p.title) }
+            @if !p.description.trim().is_empty() { p.dek { (p.description) } }
             @if !page {
                 p.meta {
                     @if let Some(t) = p.published_at { time datetime=(iso(t)) { (day(t)) } }
-                    @if edited { " · updated " time datetime=(iso(p.updated_at)) { (day(p.updated_at)) } }
-                    " · " ((words / 220).max(1)) " min read"
+                    @if edited { span aria-hidden="true" { "·" } span { "updated " time datetime=(iso(p.updated_at)) { (day(p.updated_at)) } } }
+                    span aria-hidden="true" { "·" } span { ((words / 220).max(1)) " min read" }
                     @if !s.author.is_empty() {
-                        " · "
-                        @if s.author_url.is_empty() { (s.author) } @else { a href=(s.author_url) rel="author" { (s.author) } }
+                        span aria-hidden="true" { "·" }
+                        @if s.author_url.is_empty() { span { (s.author) } } @else { a href=(s.author_url) rel="author" { (s.author) } }
                     }
                 }
             }
-            @if !p.cover.is_empty() { img src=(p.cover) alt=(p.title); }
+            @if !p.cover.is_empty() { img.cover src=(p.cover) alt=(p.title) fetchpriority="high"; }
             @if doc.toc.len() >= 3 {
-                nav.toc aria-label="Contents" {
-                    p { "Contents" }
+                details.toc open {
+                    summary { "On this page" }
                     ol { @for (level, id, text) in &doc.toc { li class=(format!("l{level}")) { a href=(format!("#{id}")) { (text) } } } }
                 }
             }
-            (PreEscaped(&doc.html))
+            div.prose { (PreEscaped(&doc.html)) }
             @if !p.tags.is_empty() {
-                p.tags { @for t in &p.tags { a href=(format!("/tags/{}/", slugify(t))) { "#" (t) } } }
+                ul.tags { @for t in &p.tags { li { a href=(format!("/tags/{}/", slugify(t))) { "#" (t) } } } }
             }
         }
         @if let Some((label, url)) = cx.project() {
@@ -411,7 +400,7 @@ pub fn article(cx: &Ctx, p: &Post) -> String {
             }
         }
         @if !page && !related.is_empty() {
-            section.related { h2 { "Read next" } ul { @for r in &related { li { a href=(format!("/{}/", r.slug)) { (r.title) } } } } }
+            section { h2.section { "Read next" } (list(&related, true)) }
         }
     };
     layout(cx, head, body)
@@ -437,7 +426,7 @@ pub fn tag(cx: &Ctx, slug: &str) -> Option<String> {
         markdown: None,
         ld: json!({"@context": "https://schema.org", "@type": "CollectionPage", "name": format!("#{name}"), "url": url}),
     };
-    Some(layout(cx, head, html! { nav.crumbs { a href="/" { (s.title) } " › #" (name) } h1 { "#" (name) } (list(&posts)) }))
+    Some(layout(cx, head, html! { nav.crumbs aria-label="Breadcrumb" { a href="/" { "← " (s.title) } } h1 { "#" (name) } (list(&posts, false)) }))
 }
 
 pub fn not_found(cx: &Ctx) -> String {
@@ -457,7 +446,7 @@ pub fn not_found(cx: &Ctx) -> String {
         markdown: None,
         ld: json!({}),
     };
-    layout(cx, head, html! { h1 { "Nothing here" } p { "This page doesn't exist, but these do:" } (list(&latest)) })
+    layout(cx, head, html! { h1 { "Nothing here" } p.lead { "This page doesn't exist, but these do." } (list(&latest, false)) })
 }
 
 pub fn feed(cx: &Ctx) -> String {

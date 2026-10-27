@@ -100,7 +100,7 @@ async fn a_blog_from_creation_to_every_file_it_serves() {
     let html = r.text();
     assert_eq!(r.status, StatusCode::OK);
     for needle in [r#""@type":"BlogPosting""#, r#""@type":"BreadcrumbList""#, r#"id="why-one-box""#, r#"id="why-one-box-2""#,
-        r##"href="#the-database""##, "Contents", "Example deploys an app with one command.", "article:published_time",
+        r##"href="#the-database""##, "On this page", r#"id="theme""#, "Example deploys an app with one command.", "article:published_time",
         r#"href="/tags/self-hosting/""#, "https://blog.example.com/one-server.md", "og/one-server.png?v=", "1 min read"] {
         assert!(html.contains(needle), "post page lacks {needle}");
     }
