@@ -1,4 +1,4 @@
-//! Inkport: one small server for many blogs on many domains, built for search engines and AI answers.
+//! Tugpress: one small server for many blogs on many domains, built for search engines and AI answers.
 
 pub mod api;
 pub mod db;
@@ -28,7 +28,7 @@ impl App {
     pub fn open(data: &Path, token: &str, scheme: &str, indexnow: bool) -> anyhow::Result<Arc<App>> {
         std::fs::create_dir_all(data.join("media"))?;
         Ok(Arc::new(App {
-            db: Mutex::new(db::open(&data.join("inkport.db"))?),
+            db: Mutex::new(db::open(&data.join("tugpress.db"))?),
             data: data.to_path_buf(),
             token: token.to_string(),
             scheme: scheme.to_string(),

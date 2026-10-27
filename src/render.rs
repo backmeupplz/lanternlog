@@ -7,7 +7,7 @@ use pulldown_cmark::{CowStr, Event, HeadingLevel, Options, Parser, Tag, TagEnd};
 use serde_json::{Value, json};
 use std::collections::HashSet;
 
-pub const INKPORT_URL: &str = "https://inkport.dev";
+pub const TUGPRESS_URL: &str = "https://tugpress.com";
 
 /// A post's Markdown, rendered: its HTML, its outline (level, id, text) and its plain text.
 pub struct Doc {
@@ -267,7 +267,7 @@ fn layout(cx: &Ctx, head: Head, body: Markup) -> String {
                 main.wrap { (body) }
                 footer { div.wrap {
                     a href="/feed.xml" { "Feed" } " · " a href="/sitemap.xml" { "Sitemap" } " · " a href="/llms.txt" { "llms.txt" }
-                    " · Published with " a href=(INKPORT_URL) { "Inkport" }
+                    " · Published with " a href=(TUGPRESS_URL) { "Tugpress" }
                 } }
             }
         }
@@ -450,7 +450,7 @@ pub fn feed(cx: &Ctx) -> String {
     let mut x = format!(
         "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<feed xmlns=\"http://www.w3.org/2005/Atom\" xml:lang=\"{lang}\">\n\
          <title>{title}</title>\n<subtitle>{sub}</subtitle>\n<link href=\"{home}/\"/>\n<link rel=\"self\" href=\"{home}/feed.xml\"/>\n\
-         <id>{home}/</id>\n<updated>{updated}</updated>\n<author><name>{author}</name></author>\n<generator uri=\"{INKPORT_URL}\">Inkport</generator>\n",
+         <id>{home}/</id>\n<updated>{updated}</updated>\n<author><name>{author}</name></author>\n<generator uri=\"{TUGPRESS_URL}\">Tugpress</generator>\n",
         lang = esc(&s.lang),
         title = esc(&s.title),
         sub = esc(&s.description),

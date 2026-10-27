@@ -10,7 +10,7 @@ fn fonts() -> Arc<usvg::fontdb::Database> {
         .get_or_init(|| {
             let mut db = usvg::fontdb::Database::new();
             db.load_system_fonts();
-            if let Ok(dir) = std::env::var("INKPORT_FONTS") {
+            if let Ok(dir) = std::env::var("TUGPRESS_FONTS") {
                 db.load_fonts_dir(dir);
             }
             Arc::new(db)

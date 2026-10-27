@@ -7,8 +7,8 @@ RUN cargo build --release --locked
 FROM debian:trixie-slim
 # Inter draws the share images; certificates let IndexNow pings leave over HTTPS.
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates fonts-inter && rm -rf /var/lib/apt/lists/*
-COPY --from=build /src/target/release/inkport /usr/local/bin/inkport
-ENV INKPORT_DATA=/data PORT=8080
+COPY --from=build /src/target/release/tugpress /usr/local/bin/tugpress
+ENV TUGPRESS_DATA=/data PORT=8080
 VOLUME /data
 EXPOSE 8080
-CMD ["inkport"]
+CMD ["tugpress"]

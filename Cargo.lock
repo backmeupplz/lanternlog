@@ -666,28 +666,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "edcd27d72f2f071c64249075f42e205ff93c9a4c5f6c6da53e79ed9f9832c285"
 
 [[package]]
-name = "inkport"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "axum",
- "chrono",
- "flate2",
- "http-body-util",
- "maud",
- "pulldown-cmark",
- "rand 0.9.5",
- "reqwest",
- "resvg",
- "rusqlite",
- "serde",
- "serde_json",
- "subtle",
- "tokio",
- "tower",
-]
-
-[[package]]
 name = "ipnet"
 version = "2.12.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1634,6 +1612,28 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d2df906b07856748fa3f6e0ad0cbaa047052d4a7dd609e231c4f72cee8c36f31"
 dependencies = [
  "core_maths",
+]
+
+[[package]]
+name = "tugpress"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "axum",
+ "chrono",
+ "flate2",
+ "http-body-util",
+ "maud",
+ "pulldown-cmark",
+ "rand 0.9.5",
+ "reqwest",
+ "resvg",
+ "rusqlite",
+ "serde",
+ "serde_json",
+ "subtle",
+ "tokio",
+ "tower",
 ]
 
 [[package]]

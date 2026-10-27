@@ -1,6 +1,6 @@
-# Inkport
+# Tugpress
 
-Inkport is one small server that hosts many blogs, each on its own domain, and makes every page easy for search engines and AI assistants to find, read and cite. It is a single Rust binary with an SQLite file, and you publish to it through a small HTTP API, which suits scripts and AI agents as well as people.
+Tugpress is one small server that hosts many blogs, each on its own domain, and makes every page easy for search engines and AI assistants to find, read and cite. It is a single Rust binary with an SQLite file, and you publish to it through a small HTTP API, which suits scripts and AI agents as well as people.
 
 ## What every blog gets
 
@@ -19,15 +19,15 @@ Inkport is one small server that hosts many blogs, each on its own domain, and m
 With Docker:
 
 ```sh
-docker build -t inkport .
-docker run -d --name inkport -p 8080:8080 -v inkport:/data -e INKPORT_TOKEN="$(openssl rand -hex 32)" inkport
+docker build -t tugpress .
+docker run -d --name tugpress -p 8080:8080 -v tugpress:/data -e TUGPRESS_TOKEN="$(openssl rand -hex 32)" tugpress
 ```
 
 From source, with Rust installed:
 
 ```sh
 cargo build --release
-INKPORT_TOKEN=change-me ./target/release/inkport
+TUGPRESS_TOKEN=change-me ./target/release/tugpress
 ```
 
 Point each blog's domain at the server, and put a TLS proxy in front of it (any proxy that passes the `Host` header works). On [Tugport](https://tugport.com), deploy the repository as one service and add every blog's domain to it; Tugport issues the certificates.
@@ -35,21 +35,21 @@ Point each blog's domain at the server, and put a TLS proxy in front of it (any 
 | Variable | Default | What it does |
 |---|---|---|
 | `PORT` | `8080` | Port to listen on |
-| `INKPORT_DATA` | `./data` | Folder for `inkport.db` and uploaded images |
-| `INKPORT_TOKEN` | none | Bearer token for the admin API; the API is off without it |
-| `INKPORT_SCHEME` | `https` | Scheme used in addresses in pages and feeds |
-| `INKPORT_INDEXNOW` | `on` | `off` stops IndexNow pings |
-| `INKPORT_FONTS` | none | Extra folder of fonts for share images (Inter is in the Docker image) |
+| `TUGPRESS_DATA` | `./data` | Folder for `tugpress.db` and uploaded images |
+| `TUGPRESS_TOKEN` | none | Bearer token for the admin API; the API is off without it |
+| `TUGPRESS_SCHEME` | `https` | Scheme used in addresses in pages and feeds |
+| `TUGPRESS_INDEXNOW` | `on` | `off` stops IndexNow pings |
+| `TUGPRESS_FONTS` | none | Extra folder of fonts for share images (Inter is in the Docker image) |
 
 ## Publish
 
-Every call needs `Authorization: Bearer $INKPORT_TOKEN`, and can go to any of the server's domains.
+Every call needs `Authorization: Bearer $TUGPRESS_TOKEN`, and can go to any of the server's domains.
 
 Create or change a blog:
 
 ```sh
 curl -X PUT https://blog.example.com/api/sites/blog.example.com \
-  -H "Authorization: Bearer $INKPORT_TOKEN" -H "Content-Type: application/json" -d '{
+  -H "Authorization: Bearer $TUGPRESS_TOKEN" -H "Content-Type: application/json" -d '{
     "title": "Example Notes",
     "description": "What we learn running Example in production.",
     "aliases": ["www.blog.example.com"],
@@ -64,7 +64,7 @@ Publish a post (the slug comes from the address; `status` is `draft` until you s
 
 ```sh
 curl -X PUT https://blog.example.com/api/sites/blog.example.com/posts/one-server \
-  -H "Authorization: Bearer $INKPORT_TOKEN" -H "Content-Type: application/json" -d '{
+  -H "Authorization: Bearer $TUGPRESS_TOKEN" -H "Content-Type: application/json" -d '{
     "title": "Moving to one server",
     "description": "Why we put every service on one machine, and what it cost.",
     "body": "We moved **every service** to one box.\n\n## Why one box\n\n...",
@@ -88,7 +88,7 @@ Posts are Markdown with tables, footnotes, task lists and heading ids (`## Setup
 
 ## What it leaves out
 
-Inkport has no web editor, comments, newsletters or themes beyond an accent color. Posts come in through the API, and anything that needs a browser is meant to live on your product's own site.
+Tugpress has no web editor, comments, newsletters or themes beyond an accent color. Posts come in through the API, and anything that needs a browser is meant to live on your product's own site.
 
 ## License
 

@@ -45,7 +45,7 @@ impl FromRequestParts<Arc<App>> for Admin {
 
     async fn from_request_parts(parts: &mut Parts, app: &Arc<App>) -> Result<Self> {
         if app.token.is_empty() {
-            return Err(Error(StatusCode::SERVICE_UNAVAILABLE, "the API is off until INKPORT_TOKEN is set".into()));
+            return Err(Error(StatusCode::SERVICE_UNAVAILABLE, "the API is off until TUGPRESS_TOKEN is set".into()));
         }
         let given = parts.headers.get(header::AUTHORIZATION).and_then(|v| v.to_str().ok()).and_then(|v| v.strip_prefix("Bearer "));
         match given {
