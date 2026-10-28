@@ -128,6 +128,17 @@ async fn a_blog_from_creation_to_every_file_it_serves() {
     let tag = get(&app, "/tags/self-hosting/").await;
     assert!(tag.status == StatusCode::OK && tag.text().contains("noindex"));
     assert_eq!(get(&app, &format!("/{key}.txt")).await.text(), key);
+    // A PUT without a key keeps it; one with a key of its own replaces it; a malformed key is refused.
+    let r = send(&app, "PUT", "admin", "/api/sites/blog.example.com", true, Some(site.clone()), &[]).await;
+    assert_eq!(r.json()["indexnow_key"], json!(key));
+    let mut own = site.clone();
+    own["indexnow_key"] = json!("143f4ce9a39c0691d2e85e8b486880a4");
+    let r = send(&app, "PUT", "admin", "/api/sites/blog.example.com", true, Some(own.clone()), &[]).await;
+    assert_eq!(r.json()["indexnow_key"], "143f4ce9a39c0691d2e85e8b486880a4");
+    assert_eq!(get(&app, "/143f4ce9a39c0691d2e85e8b486880a4.txt").await.text(), "143f4ce9a39c0691d2e85e8b486880a4");
+    assert_eq!(get(&app, &format!("/{key}.txt")).await.status, StatusCode::NOT_FOUND);
+    own["indexnow_key"] = json!("../x.txt");
+    assert_eq!(send(&app, "PUT", "admin", "/api/sites/blog.example.com", true, Some(own), &[]).await.status, StatusCode::BAD_REQUEST);
     assert!(get(&app, "/favicon.svg").await.text().starts_with("<svg"));
     let card = get(&app, "/og/one-server.png").await;
     assert_eq!(card.headers["content-type"], "image/png");

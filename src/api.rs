@@ -145,6 +145,9 @@ async fn put_site(_: Admin, State(app): State<Arc<App>>, Path(host): Path<String
     if s.head.len() > 20_000 || s.footer.chars().count() > 500 {
         return Err(bad("head is at most 20,000 bytes and footer at most 500 characters"));
     }
+    if !s.indexnow_key.is_empty() && (!(8..=128).contains(&s.indexnow_key.len()) || !s.indexnow_key.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-')) {
+        return Err(bad("indexnow_key is 8 to 128 letters, digits or dashes"));
+    }
     check_url("project_url", &s.project_url, false)?;
     check_url("author_url", &s.author_url, false)?;
     s.updated_at = now();

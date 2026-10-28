@@ -70,7 +70,8 @@ pub struct Site {
     pub font: String,
     #[serde(default = "yes")]
     pub credit: bool,
-    #[serde(skip_deserializing)]
+    /// The IndexNow key, served at /<key>.txt. A new site gets a random one unless the PUT names its own
+    /// (to share a key with other tools that ping IndexNow for the domain); a PUT without one keeps the current key.
     pub indexnow_key: String,
     #[serde(skip_deserializing)]
     pub updated_at: i64,
@@ -193,14 +194,15 @@ pub fn sites(c: &Connection) -> rusqlite::Result<Vec<Site>> {
 }
 
 pub fn put_site(c: &Connection, s: &Site) -> rusqlite::Result<()> {
-    let key = format!("{:032x}", rand::random::<u128>());
+    let key = if s.indexnow_key.is_empty() { format!("{:032x}", rand::random::<u128>()) } else { s.indexnow_key.clone() };
     c.execute(
         "INSERT INTO sites (host, aliases, title, description, lang, author, author_url, project_name, project_url, cta, accent, home,
            logo, favicon, og_image, links, head, footer, font, credit, indexnow_key, updated_at)
          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22)
          ON CONFLICT (host) DO UPDATE SET aliases = ?2, title = ?3, description = ?4, lang = ?5, author = ?6, author_url = ?7,
            project_name = ?8, project_url = ?9, cta = ?10, accent = ?11, home = ?12, logo = ?13, favicon = ?14, og_image = ?15,
-           links = ?16, head = ?17, footer = ?18, font = ?19, credit = ?20, updated_at = ?22",
+           links = ?16, head = ?17, footer = ?18, font = ?19, credit = ?20, updated_at = ?22,
+           indexnow_key = CASE WHEN ?23 = '' THEN indexnow_key ELSE ?21 END",
         params![
             s.host,
             serde_json::to_string(&s.aliases).unwrap_or_default(),
@@ -223,7 +225,8 @@ pub fn put_site(c: &Connection, s: &Site) -> rusqlite::Result<()> {
             s.font,
             s.credit,
             key,
-            s.updated_at
+            s.updated_at,
+            s.indexnow_key
         ],
     )?;
     Ok(())

@@ -57,6 +57,7 @@ curl -X PUT https://blog.example.com/api/sites/blog.example.com \
 | `accent` | A color such as `#e4572e` for links, buttons and share images |
 | `lang` | The language tag of the blog, such as `en` or `pt-BR` |
 | `home` | The slug of a page to show at `/` instead of the plain list of posts, with the latest posts below it |
+| `indexnow_key` | The IndexNow key the blog serves at `/<key>.txt` and pings with. Optional: a new blog gets a random one, and leaving it out keeps the current one. Set it to share a key with other tools that tell IndexNow about the same domain |
 
 ### Your own brand
 

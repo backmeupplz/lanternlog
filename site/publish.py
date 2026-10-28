@@ -26,6 +26,7 @@ site = {
     "accent": "#b45309",
     "lang": "en",
     "home": "home",
+    "indexnow_key": "143f4ce9a39c0691d2e85e8b486880a4",  # Prime Radiant's key (bin/indexnow.py), so it can ping for this domain too
     "head": '<script defer src="https://lumen.borodutch.com/l.js"></script>\n'
             '<meta name="google-site-verification" content="hEhCz1eKYaKokccds4_UjFgxWsBL3lS1sSsipnx4aaE" />',
 }
