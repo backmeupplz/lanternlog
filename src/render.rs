@@ -469,7 +469,8 @@ pub fn article(cx: &Ctx, p: &Post) -> String {
                     }
                 }
             }
-            @if !p.cover.is_empty() { img.cover src=(p.cover) alt=(p.title) fetchpriority="high"; }
+            // Covers are share-sized (1200×630); the box is reserved from these, so the text under it never jumps (PageSpeed CLS).
+            @if !p.cover.is_empty() { img.cover src=(p.cover) alt=(p.title) width="1200" height="630" fetchpriority="high"; }
             @if doc.toc.len() >= 3 {
                 details.toc open {
                     summary { "On this page" }
