@@ -13,7 +13,7 @@ concurrency:
 jobs:
   check:
     # Our own pushes and PRs run on the Mac runners with a persistent target dir; outsiders' PRs run on Linux.
-    runs-on: ${{ (github.event_name != 'pull_request' || contains(fromJSON('["backmeupplz","renovate","claude"]'), github.event.pull_request.user.login)) && 'macos-latest' || 'ubuntu-latest' }}
+    runs-on: ${{ (github.event_name != 'pull_request' || contains(fromJSON('["backmeupplz","renovate","claude","radiant"]'), github.event.pull_request.user.login)) && 'macos-latest' || 'ubuntu-latest' }}
     env:
       CARGO_PROFILE_DEV_DEBUG: 0
     steps:
