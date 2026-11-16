@@ -11,6 +11,7 @@ Lanternlog is one small server that hosts many blogs, each on its own domain, an
 - **Files for crawlers and assistants:** `sitemap.xml`, an Atom feed at `feed.xml` with full posts, `robots.txt`, [`llms.txt`](https://llmstxt.org) and `llms-full.txt`, and a Markdown copy of every page at `/slug.md`.
 - **IndexNow.** Each blog has its own key, and publishing a post tells Bing, Yandex and the other IndexNow engines about it within seconds. Google reads the sitemap.
 - **An outline for long posts.** Headings get stable ids, and posts with three or more get a table of contents.
+- **Every post in every language.** A translation lives at its own address (`/de/one-server/`), each language has its own home page, feed and `llms.txt`, and every version names the others with `hreflang`, in the sitemap too. Share cards are drawn in the translation's script, and the blog's chrome can speak each language.
 - **A way back to your product.** Each blog names the project it writes about, and every post ends with a call to action that links to it.
 - **Speed.** Pages are rendered once and served from memory, gzipped and with ETags, until the next write. Lighthouse scores 100 for performance, accessibility, best practices and SEO.
 - **Made for reading.** A book-style serif for posts, light and dark themes with a toggle that remembers the reader's choice, and link colors adjusted to stay readable whatever accent a blog picks.
@@ -41,7 +42,7 @@ Point each blog's domain at the server, and put a TLS proxy in front of it (any 
 | `LANTERNLOG_TOKEN` | none | Bearer token for the admin API; the API is off without it |
 | `LANTERNLOG_SCHEME` | `https` | Scheme used in addresses in pages and feeds |
 | `LANTERNLOG_INDEXNOW` | `on` | `off` stops IndexNow pings |
-| `LANTERNLOG_FONTS` | none | Extra folder of fonts for share images (Inter is in the Docker image) |
+| `LANTERNLOG_FONTS` | none | Extra folder of fonts for share images (Inter and Noto are in the Docker image) |
 
 ## Publish
 
@@ -82,7 +83,9 @@ The answer holds the post's address. Set `"kind": "page"` for pages such as Abou
 | `GET /api/sites` | All blogs |
 | `GET`, `PUT`, `DELETE /api/sites/{host}` | One blog; `PUT` creates or replaces its settings |
 | `GET /api/sites/{host}/posts` | Its posts and pages, drafts included |
-| `GET`, `PUT`, `DELETE /api/sites/{host}/posts/{slug}` | One post; `PUT` creates or replaces it |
+| `GET`, `PUT`, `DELETE /api/sites/{host}/posts/{slug}` | One post; `PUT` creates or replaces it, or with a `lang` other than the blog's writes a translation |
+| `GET /api/sites/{host}/posts/{slug}/translations` | The post's translations |
+| `GET`, `PUT`, `DELETE /api/sites/{host}/posts/{slug}/translations/{lang}` | One translation, at `/{lang}/{slug}/`; it takes the same fields as a post |
 | `POST /api/sites/{host}/media` | Uploads an image (the raw bytes, with its `Content-Type`) and answers with its address |
 | `GET /api/health` | `{"ok": true, "version"}` |
 

@@ -3,6 +3,7 @@
 
 use rusqlite::{Connection, OptionalExtension, Row, params};
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 
 const SCHEMA: &str = "
 PRAGMA journal_mode = WAL;
@@ -37,6 +38,22 @@ CREATE TABLE IF NOT EXISTS posts (
   updated_at INTEGER NOT NULL,
   PRIMARY KEY (host, slug)
 );
+CREATE TABLE IF NOT EXISTS translations (
+  host TEXT NOT NULL,
+  slug TEXT NOT NULL,
+  lang TEXT NOT NULL,
+  title TEXT NOT NULL,
+  description TEXT NOT NULL DEFAULT '',
+  body TEXT NOT NULL,
+  tags TEXT NOT NULL DEFAULT '[]',
+  cover TEXT NOT NULL DEFAULT '',
+  og_image TEXT NOT NULL DEFAULT '',
+  status TEXT NOT NULL DEFAULT 'draft',
+  published_at INTEGER,
+  updated_at INTEGER NOT NULL,
+  PRIMARY KEY (host, slug, lang),
+  FOREIGN KEY (host, slug) REFERENCES posts(host, slug) ON DELETE CASCADE
+);
 ";
 
 /// A blog. `host` is its canonical domain; `aliases` redirect to it.
@@ -70,6 +87,8 @@ pub struct Site {
     pub font: String,
     #[serde(default = "yes")]
     pub credit: bool,
+    /// What changes in each other language the blog's posts are translated into, keyed by language code.
+    pub locales: BTreeMap<String, Locale>,
     /// The IndexNow key, served at /<key>.txt. A new site gets a random one unless the PUT names its own
     /// (to share a key with other tools that ping IndexNow for the domain); a PUT without one keeps the current key.
     pub indexnow_key: String,
@@ -77,12 +96,67 @@ pub struct Site {
     pub updated_at: i64,
 }
 
-/// A post, or a page when `kind` is "page" (no date, not in the feed).
+/// The blog in one of its other languages. Anything left empty stays as the blog has it.
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Locale {
+    /// The language's name in the switcher, when the built-in one doesn't suit.
+    pub name: String,
+    pub title: String,
+    pub description: String,
+    pub project_name: String,
+    pub project_url: String,
+    pub cta: String,
+    pub links: Vec<Link>,
+    pub footer: String,
+    /// The chrome's words (lang::STRINGS), such as "Read next" or "{n} min read".
+    pub strings: BTreeMap<String, String>,
+}
+
+impl Site {
+    /// What the blog set for a language, whatever case its code is written in (`pt-BR` finds `pt-br`).
+    pub fn locale(&self, lang: &str) -> Option<&Locale> {
+        self.locales.get(&crate::lang::code(lang).unwrap_or_else(|| lang.to_ascii_lowercase()))
+    }
+
+    /// The blog as a page in `lang` shows it: its language, and the title, links and call to action it set for it.
+    pub fn localized(&self, lang: &str) -> Site {
+        let mut s = self.clone();
+        s.lang = lang.to_string();
+        if let Some(l) = self.locale(lang) {
+            for (field, own) in [
+                (&mut s.title, &l.title),
+                (&mut s.description, &l.description),
+                (&mut s.project_name, &l.project_name),
+                (&mut s.project_url, &l.project_url),
+                (&mut s.cta, &l.cta),
+                (&mut s.footer, &l.footer),
+            ] {
+                if !own.trim().is_empty() {
+                    *field = own.clone();
+                }
+            }
+            if !l.links.is_empty() {
+                s.links = l.links.clone();
+            }
+        }
+        s
+    }
+}
+
+/// A post, or a page when `kind` is "page" (no date, not in the feed). A translation is a post with a `lang`
+/// of its own: it shares the original's slug and kind, and lives at /<lang>/<slug>/.
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Post {
     #[serde(skip_deserializing)]
     pub slug: String,
+    /// Set on translations; empty on the original, which is in the blog's language.
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub lang: String,
+    /// On a PUT with a `lang`: the slug of the post this translates (the address's slug when left out).
+    #[serde(skip_serializing)]
+    pub translation_of: String,
     pub kind: String,
     pub title: String,
     pub description: String,
@@ -108,6 +182,7 @@ const COLUMNS: &[(&str, &str, &str)] = &[
     ("sites", "footer", "TEXT NOT NULL DEFAULT ''"),
     ("sites", "credit", "INTEGER NOT NULL DEFAULT 1"),
     ("posts", "og_image", "TEXT NOT NULL DEFAULT ''"),
+    ("sites", "locales", "TEXT NOT NULL DEFAULT '{}'"),
 ];
 
 pub fn open(path: &std::path::Path) -> rusqlite::Result<Connection> {
@@ -158,6 +233,7 @@ fn site_row(r: &Row) -> rusqlite::Result<Site> {
         footer: r.get("footer")?,
         font: r.get("font")?,
         credit: r.get("credit")?,
+        locales: json(r.get("locales")?),
         indexnow_key: r.get("indexnow_key")?,
         updated_at: r.get("updated_at")?,
     })
@@ -166,6 +242,8 @@ fn site_row(r: &Row) -> rusqlite::Result<Site> {
 fn post_row(r: &Row) -> rusqlite::Result<Post> {
     Ok(Post {
         slug: r.get("slug")?,
+        lang: r.get("lang").unwrap_or_default(),
+        translation_of: String::new(),
         kind: r.get("kind")?,
         title: r.get("title")?,
         description: r.get("description")?,
@@ -197,11 +275,11 @@ pub fn put_site(c: &Connection, s: &Site) -> rusqlite::Result<()> {
     let key = if s.indexnow_key.is_empty() { format!("{:032x}", rand::random::<u128>()) } else { s.indexnow_key.clone() };
     c.execute(
         "INSERT INTO sites (host, aliases, title, description, lang, author, author_url, project_name, project_url, cta, accent, home,
-           logo, favicon, og_image, links, head, footer, font, credit, indexnow_key, updated_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22)
+           logo, favicon, og_image, links, head, footer, font, credit, indexnow_key, updated_at, locales)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?24)
          ON CONFLICT (host) DO UPDATE SET aliases = ?2, title = ?3, description = ?4, lang = ?5, author = ?6, author_url = ?7,
            project_name = ?8, project_url = ?9, cta = ?10, accent = ?11, home = ?12, logo = ?13, favicon = ?14, og_image = ?15,
-           links = ?16, head = ?17, footer = ?18, font = ?19, credit = ?20, updated_at = ?22,
+           links = ?16, head = ?17, footer = ?18, font = ?19, credit = ?20, updated_at = ?22, locales = ?24,
            indexnow_key = CASE WHEN ?23 = '' THEN indexnow_key ELSE ?21 END",
         params![
             s.host,
@@ -226,7 +304,8 @@ pub fn put_site(c: &Connection, s: &Site) -> rusqlite::Result<()> {
             s.credit,
             key,
             s.updated_at,
-            s.indexnow_key
+            s.indexnow_key,
+            serde_json::to_string(&s.locales).unwrap_or_default()
         ],
     )?;
     Ok(())
@@ -276,4 +355,72 @@ pub fn put_post(c: &Connection, host: &str, p: &Post) -> rusqlite::Result<()> {
 
 pub fn delete_post(c: &Connection, host: &str, slug: &str) -> rusqlite::Result<bool> {
     Ok(c.execute("DELETE FROM posts WHERE host = ?1 AND slug = ?2", [host, slug])? > 0)
+}
+
+/// A translation as a post: its own text and dates, with the original's slug and kind.
+const TRANSLATION: &str = "SELECT t.*, p.kind FROM translations t JOIN posts p ON p.host = t.host AND p.slug = t.slug";
+
+pub fn translation(c: &Connection, host: &str, slug: &str, lang: &str) -> rusqlite::Result<Option<Post>> {
+    c.query_row(&format!("{TRANSLATION} WHERE t.host = ?1 AND t.slug = ?2 AND t.lang = ?3"), [host, slug, lang], post_row).optional()
+}
+
+/// Every translation of one post, drafts included.
+pub fn translations_of(c: &Connection, host: &str, slug: &str) -> rusqlite::Result<Vec<Post>> {
+    c.prepare(&format!("{TRANSLATION} WHERE t.host = ?1 AND t.slug = ?2 ORDER BY t.lang"))?.query_map([host, slug], post_row)?.collect()
+}
+
+/// The posts readers see in `lang`, newest first: published translations of published posts.
+pub fn translated(c: &Connection, host: &str, lang: &str) -> rusqlite::Result<Vec<Post>> {
+    c.prepare(&format!(
+        "{TRANSLATION} WHERE t.host = ?1 AND t.lang = ?2 AND t.status = 'published' AND p.status = 'published'
+         ORDER BY COALESCE(t.published_at, t.updated_at) DESC, t.slug"
+    ))?
+    .query_map([host, lang], post_row)?
+    .collect()
+}
+
+/// Which languages each published post can be read in: (slug, lang, updated_at), originals with an empty lang.
+pub fn versions(c: &Connection, host: &str) -> rusqlite::Result<Vec<(String, String, i64)>> {
+    c.prepare(
+        "SELECT slug, '' AS lang, updated_at FROM posts WHERE host = ?1 AND status = 'published'
+         UNION ALL
+         SELECT t.slug, t.lang, t.updated_at FROM translations t JOIN posts p ON p.host = t.host AND p.slug = t.slug
+         WHERE t.host = ?1 AND t.status = 'published' AND p.status = 'published'
+         ORDER BY 1, 2",
+    )?
+    .query_map([host], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))?
+    .collect()
+}
+
+/// Whether any post of the blog, draft or not, is translated into `lang`.
+pub fn has_lang(c: &Connection, host: &str, lang: &str) -> rusqlite::Result<bool> {
+    c.prepare("SELECT 1 FROM translations WHERE host = ?1 AND lang = ?2")?.exists([host, lang])
+}
+
+pub fn put_translation(c: &Connection, host: &str, p: &Post) -> rusqlite::Result<()> {
+    c.execute(
+        "INSERT INTO translations (host, slug, lang, title, description, body, tags, cover, og_image, status, published_at, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)
+         ON CONFLICT (host, slug, lang) DO UPDATE SET title = ?4, description = ?5, body = ?6, tags = ?7, cover = ?8,
+           og_image = ?9, status = ?10, published_at = ?11, updated_at = ?12",
+        params![
+            host,
+            p.slug,
+            p.lang,
+            p.title,
+            p.description,
+            p.body,
+            serde_json::to_string(&p.tags).unwrap_or_default(),
+            p.cover,
+            p.og_image,
+            p.status,
+            p.published_at,
+            p.updated_at
+        ],
+    )?;
+    Ok(())
+}
+
+pub fn delete_translation(c: &Connection, host: &str, slug: &str, lang: &str) -> rusqlite::Result<bool> {
+    Ok(c.execute("DELETE FROM translations WHERE host = ?1 AND slug = ?2 AND lang = ?3", [host, slug, lang])? > 0)
 }

@@ -119,7 +119,7 @@ pre code{font-size:inherit}
 .anchor{margin-left:.45rem;color:var(--muted);font-weight:400;text-decoration:none;opacity:0}
 h2:hover>.anchor,h3:hover>.anchor{opacity:1}
 .footnote-definition,.footnotes{font-size:.92rem;color:var(--muted)}
-.crumbs{font-size:.9rem}
+.langs{display:flex;flex-wrap:wrap;gap:.3rem .9rem;margin:0 0 1.8rem;font-size:.88rem;color:var(--muted)}.langs a{color:var(--muted);text-decoration:none}.langs a:hover{color:var(--fg)}.langs [aria-current]{color:var(--fg);font-weight:600}.crumbs{font-size:.9rem}
 .crumbs a{color:var(--muted);text-decoration:none}
 .crumbs a:hover{color:var(--fg)}
 .meta{display:flex;flex-wrap:wrap;gap:.2rem .5rem;margin:0 0 2.2rem;font-size:.9rem;color:var(--muted)}

@@ -2,6 +2,7 @@
 
 pub mod api;
 pub mod db;
+pub mod lang;
 pub mod og;
 pub mod render;
 pub mod style;

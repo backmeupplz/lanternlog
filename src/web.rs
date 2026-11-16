@@ -1,7 +1,7 @@
 //! The public side: every request is answered by the site its Host header names, and every page is
 //! rendered once, compressed once and served from memory until the next write.
 
-use crate::{App, db, og, render};
+use crate::{App, db, lang, og, render};
 use axum::{
     body::Body,
     extract::State,
@@ -121,24 +121,46 @@ pub async fn public(State(app): State<Arc<App>>, headers: HeaderMap, uri: Uri) -
     }
 }
 
-/// A page worth caching, or a response that isn't (redirects, misses and uploaded files).
+/// A page worth caching, or a response that isn't (redirects, misses and uploaded files). A path that starts with
+/// a language the blog has translations in (/de/...) is the blog's edition in that language.
 fn build(app: &App, host: &str, path: &str) -> Result<Cached, Box<Response<Body>>> {
     let error = |e: rusqlite::Error| plain(StatusCode::INTERNAL_SERVER_ERROR, &e.to_string());
-    let (site, posts) = {
+    let (site, posts, versions, lang, path) = {
         let c = app.conn().map_err(|_| plain(StatusCode::INTERNAL_SERVER_ERROR, "database unavailable"))?;
         let site = db::site(&c, host).map_err(error)?.ok_or_else(|| plain(StatusCode::NOT_FOUND, "No blog lives at this address."))?;
-        let posts = db::posts(&c, &site.host, false).map_err(error)?;
-        (site, posts)
+        let mut versions = render::Versions::new();
+        for (slug, lang, updated) in db::versions(&c, &site.host).map_err(error)? {
+            // A translation into the blog's own language (left over from changing it) has nowhere to live.
+            if lang.is_empty() || !lang::same(&lang, &site.lang) {
+                versions.entry(slug).or_default().push((if lang.is_empty() { site.lang.clone() } else { lang }, updated));
+            }
+        }
+        let first = path[1..].split('/').next().unwrap_or("");
+        let edition = !first.is_empty()
+            && !lang::same(first, &site.lang)
+            && versions.values().flatten().any(|(l, _)| l == first)
+            && site.host == host;
+        let (lang, rest) = if edition { (first.to_string(), path[1 + first.len()..].to_string()) } else { (site.lang.clone(), path.to_string()) };
+        if edition && rest.is_empty() {
+            return Err(Box::new(redirect(&format!("{path}/"))));
+        }
+        let posts = if edition { db::translated(&c, &site.host, &lang) } else { db::posts(&c, &site.host, false) }.map_err(error)?;
+        (site, posts, versions, lang, rest)
     };
+    let path = path.as_str();
     if site.host != host {
         return Err(Box::new(redirect(&format!("{}://{}{path}", app.scheme, site.host))));
     }
-    let cx = render::Ctx::new(&site, &app.scheme, &posts);
+    let main = site.lang.clone();
+    let edition = lang != main;
+    let local = site.localized(&lang);
+    let cx = render::Ctx::new(&local, &app.scheme, &posts, &main, &versions);
+    let prefix = cx.prefix.clone();
     let html = |s: String| Cached::new("text/html; charset=utf-8", s, 60);
     let text = |s: String| Cached::new("text/plain; charset=utf-8", s, 300);
     let card = |title: &str, subtitle: &str, meta: &str| {
         let logo = embedded(app, &site, &site.logo);
-        let c = og::Card { site: &site.title, title, subtitle, host: &site.host, meta, accent: &site.accent, logo: logo.as_deref() };
+        let c = og::Card { site: &local.title, title, subtitle, host: &site.host, meta, accent: &site.accent, logo: logo.as_deref(), lang: &lang };
         og::png(&og::svg(&c))
             .map(|png| Cached::new("image/png", png, 86_400))
             .map_err(|e| Box::new(plain(StatusCode::INTERNAL_SERVER_ERROR, &e.to_string())))
@@ -153,40 +175,48 @@ fn build(app: &App, host: &str, path: &str) -> Result<Cached, Box<Response<Body>
     match path {
         "/" => return Ok(html(render::index(&cx))),
         "/feed.xml" => return Ok(Cached::new("application/atom+xml; charset=utf-8", render::feed(&cx), 300)),
-        "/sitemap.xml" => return Ok(Cached::new("application/xml; charset=utf-8", render::sitemap(&cx), 300)),
-        "/robots.txt" => return Ok(text(render::robots(&cx))),
         "/llms.txt" => return Ok(text(render::llms(&cx))),
         "/llms-full.txt" => return Ok(text(render::llms_full(&cx))),
-        "/favicon.svg" => return Ok(Cached::new("image/svg+xml", render::favicon(&site), 86_400)),
-        "/favicon.ico" => return Err(Box::new(redirect("/favicon.svg"))),
-        "/og.png" => return card(&site.title, &site.description, ""),
+        "/og.png" => return card(&local.title, &local.description, ""),
         _ => {}
+    }
+    // These belong to the whole blog, so they live only at its root.
+    if !edition {
+        match path {
+            "/sitemap.xml" => return Ok(Cached::new("application/xml; charset=utf-8", render::sitemap(&cx), 300)),
+            "/robots.txt" => return Ok(text(render::robots(&cx))),
+            "/favicon.svg" => return Ok(Cached::new("image/svg+xml", render::favicon(&site), 86_400)),
+            "/favicon.ico" => return Err(Box::new(redirect("/favicon.svg"))),
+            _ => {}
+        }
     }
     let rest = &path[1..];
     if let Some(slug) = rest.strip_prefix("og/").and_then(|r| r.strip_suffix(".png")) {
-        return find(slug).map_or_else(|| Err(missing()), |p| card(&p.title, &p.description, &render::card_meta(p)));
-    }
-    if let Some(file) = rest.strip_prefix("media/") {
-        return Err(Box::new(media(app, &site.host, file)));
+        return find(slug).map_or_else(|| Err(missing()), |p| card(&p.title, &p.description, &render::card_meta(&cx, p)));
     }
     if let Some(tag) = rest.strip_prefix("tags/") {
         return match tag.strip_suffix('/') {
             Some(slug) => render::tag(&cx, slug).map(html).ok_or_else(missing),
-            None => Err(Box::new(redirect(&format!("/tags/{tag}/")))),
+            None => Err(Box::new(redirect(&format!("{prefix}/tags/{tag}/")))),
         };
     }
-    if rest.strip_suffix(".txt") == Some(site.indexnow_key.as_str()) {
-        return Ok(text(site.indexnow_key.clone()));
+    if !edition {
+        if let Some(file) = rest.strip_prefix("media/") {
+            return Err(Box::new(media(app, &site.host, file)));
+        }
+        if rest.strip_suffix(".txt") == Some(site.indexnow_key.as_str()) {
+            return Ok(text(site.indexnow_key.clone()));
+        }
     }
     if let Some(p) = rest.strip_suffix(".md").and_then(find) {
         return Ok(Cached::new("text/markdown; charset=utf-8", render::copy(&cx, p), 300));
     }
     if !site.home.is_empty() && rest.trim_end_matches('/') == site.home {
-        return Err(Box::new(redirect("/")));
+        return Err(Box::new(redirect(&format!("{prefix}/"))));
     }
     match rest.strip_suffix('/').and_then(find) {
         Some(p) => Ok(html(render::article(&cx, p))),
-        None if find(rest).is_some() => Err(Box::new(redirect(&format!("/{rest}/")))),
+        None if find(rest).is_some() => Err(Box::new(redirect(&format!("{prefix}/{rest}/")))),
         None => Err(missing()),
     }
 }

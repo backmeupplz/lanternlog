@@ -220,3 +220,154 @@ fn tables_read_on_a_phone() {
     assert!(wide.html.contains("<th scope=\"col\"><em>Price</em></th>"), "{}", wide.html);
     assert!(wide.text.contains("Team $5 10"), "plain text keeps the cells: {}", wide.text);
 }
+
+#[tokio::test]
+async fn translations_get_their_own_indexable_addresses() {
+    let dir = std::env::temp_dir().join(format!("lanternlog-i18n-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    let app = lanternlog::router(lanternlog::App::open(&dir, TOKEN, "https", false).unwrap());
+    let put = |path: &str, body: Value| {
+        let app = app.clone();
+        let path = path.to_string();
+        async move { send(&app, "PUT", "admin", &path, true, Some(body), &[]).await }
+    };
+
+    // The blog says its chrome in German; whatever it leaves out stays English.
+    let site = json!({"title": "Example Notes", "description": "What we learn running Example.", "lang": "en",
+        "project_name": "Example", "project_url": "https://example.com", "cta": "Example deploys an app with one command.",
+        "links": [{"label": "Pricing", "url": "https://example.com/pricing"}],
+        "locales": {"DE": {"title": "Example Notizen", "cta": "Example bringt eine App mit einem Befehl online.",
+            "project_url": "https://example.com/de/", "links": [{"label": "Preise", "url": "https://example.com/de/pricing"}],
+            "strings": {"on_this_page": "Auf dieser Seite", "min_read": "{n} Min. Lesezeit", "read_next": "Weiterlesen"}}}});
+    let r = put("/api/sites/blog.example.com", site.clone()).await;
+    assert_eq!(r.status, StatusCode::OK, "{}", r.text());
+    assert!(r.json()["locales"]["de"].is_object(), "codes are kept lowercase: {}", r.text());
+    for (field, value) in [("locales", json!({"Deutsch!": {}})), ("locales", json!({"de": {"strings": {"read_more_pls": "x"}}})),
+        ("locales", json!({"de": {"links": [{"label": "x", "url": "javascript:alert(1)"}]}}))] {
+        let mut bad = site.clone();
+        bad[field] = value;
+        assert_eq!(put("/api/sites/blog.example.com", bad).await.status, StatusCode::BAD_REQUEST);
+    }
+
+    let body = "We moved **every service** to one box.\n\n## Why\n\nCost.\n\n## How\n\nSlowly.\n\n## After\n\nCalm.\n";
+    let post = json!({"title": "Moving to one server", "body": body, "tags": ["Self-hosting"], "status": "published"});
+    assert_eq!(put("/api/sites/blog.example.com/posts/one-server", post).await.status, StatusCode::OK);
+    let other = json!({"title": "Only in English", "body": "Not translated.", "status": "published"});
+    assert_eq!(put("/api/sites/blog.example.com/posts/english-only", other).await.status, StatusCode::OK);
+
+    // Two ways in: the translations address, or the post's own address with a lang.
+    let de = json!({"title": "Umzug auf einen Server", "description": "Warum alles auf einer Maschine läuft.",
+        "body": "Wir haben **jeden Dienst** auf eine Kiste gezogen.\n\n## Warum\n\nKosten.\n\n## Wie\n\nLangsam.\n\n## Danach\n\nRuhe.\n",
+        "tags": ["Selbst hosten"], "status": "published"});
+    let r = put("/api/sites/blog.example.com/posts/one-server/translations/de", de).await;
+    assert_eq!(r.status, StatusCode::OK, "{}", r.text());
+    assert_eq!(r.json()["url"], "https://blog.example.com/de/one-server/");
+    assert_eq!(r.json()["post"]["lang"], "de");
+    let pt = json!({"lang": "pt-BR", "translation_of": "one-server", "title": "Mudando para um servidor", "body": "Tudo numa máquina.", "status": "published"});
+    let r = put("/api/sites/blog.example.com/posts/one-server", pt).await;
+    assert_eq!(r.status, StatusCode::OK, "{}", r.text());
+    assert_eq!(r.json()["url"], "https://blog.example.com/pt-br/one-server/");
+    let zh = json!({"title": "我们如何把所有服务搬到一台服务器上", "body": "一台机器。", "status": "published"});
+    assert_eq!(put("/api/sites/blog.example.com/posts/one-server/translations/zh-hans", zh).await.status, StatusCode::OK);
+    let fr = json!({"title": "Brouillon", "body": "Pas encore.", "status": "draft"});
+    assert_eq!(put("/api/sites/blog.example.com/posts/one-server/translations/fr", fr.clone()).await.status, StatusCode::OK);
+    // A translation needs a post to translate, a real language other than the blog's, and the original's slug.
+    assert_eq!(put("/api/sites/blog.example.com/posts/nope/translations/de", fr.clone()).await.status, StatusCode::NOT_FOUND);
+    for path in ["/api/sites/blog.example.com/posts/one-server/translations/og", "/api/sites/blog.example.com/posts/one-server/translations/en",
+        "/api/sites/blog.example.com/posts/one-server/translations/de%2F.."] {
+        assert_eq!(put(path, fr.clone()).await.status, StatusCode::BAD_REQUEST, "{path}");
+    }
+    let moved = json!({"lang": "de", "translation_of": "one-server", "title": "x", "body": "x"});
+    assert_eq!(put("/api/sites/blog.example.com/posts/umzug", moved).await.status, StatusCode::BAD_REQUEST);
+    // Language editions and post slugs can't share an address.
+    assert_eq!(put("/api/sites/blog.example.com/posts/de", json!({"title": "x", "body": "x"})).await.status, StatusCode::BAD_REQUEST);
+    let list = send(&app, "GET", "admin", "/api/sites/blog.example.com/posts/one-server/translations", true, None, &[]).await.json();
+    let langs: Vec<&str> = list.as_array().unwrap().iter().map(|t| t["lang"].as_str().unwrap()).collect();
+    assert_eq!(langs, ["de", "fr", "pt-br", "zh-hans"]);
+
+    // The German post: its own language, canonical, every version paired, German chrome, a switcher.
+    let r = get(&app, "/de/one-server/").await;
+    let html = r.text();
+    assert_eq!(r.status, StatusCode::OK, "{html}");
+    for needle in [r#"<html lang="de">"#, r#"rel="canonical" href="https://blog.example.com/de/one-server/""#,
+        r#"hreflang="en" href="https://blog.example.com/one-server/""#, r#"hreflang="de" href="https://blog.example.com/de/one-server/""#,
+        r#"hreflang="pt-br" href="https://blog.example.com/pt-br/one-server/""#, r#"hreflang="zh-hans" href="https://blog.example.com/zh-hans/one-server/""#,
+        r#"hreflang="x-default" href="https://blog.example.com/one-server/""#, r#"property="og:locale" content="de_DE""#,
+        r#"property="og:locale:alternate" content="en_US""#, r#"property="og:locale:alternate" content="pt_BR""#, r#""inLanguage":"de""#,
+        "Umzug auf einen Server · Example Notizen", "Example bringt eine App mit einem Befehl online.", r#"href="https://example.com/de/""#,
+        ">Preise</a>", "Auf dieser Seite", "1 Min. Lesezeit", r#"href="/de/tags/selbst-hosten/""#, r#"href="/de/""#,
+        "https://blog.example.com/de/og/one-server.png?v=", "https://blog.example.com/de/one-server.md",
+        r#"<span lang="de" aria-current="page">Deutsch</span>"#, r#"<a href="https://blog.example.com/one-server/" lang="en" hreflang="en">English</a>"#,
+        ">Português (Brasil)</a>", ">简体中文</a>", r#"href="/de/feed.xml""#] {
+        assert!(html.contains(needle), "German post lacks {needle}");
+    }
+    assert!(!html.contains("hreflang=\"fr\"") && !html.contains("Pricing"), "drafts stay out, and so does the English chrome");
+
+    // The English original pairs back with every published translation, and stays English.
+    let html = get(&app, "/one-server/").await.text();
+    for needle in [r#"<html lang="en">"#, r#"hreflang="de" href="https://blog.example.com/de/one-server/""#,
+        r#"hreflang="x-default" href="https://blog.example.com/one-server/""#, r#"property="og:locale" content="en_US""#,
+        r#"property="og:locale:alternate" content="de_DE""#, "On this page", r#""inLanguage":"en""#, ">Deutsch</a>"] {
+        assert!(html.contains(needle), "English post lacks {needle}");
+    }
+    // A post without translations has no alternates or switcher.
+    let html = get(&app, "/english-only/").await.text();
+    assert!(!html.contains("hreflang") && !html.contains("og:locale:alternate") && !html.contains(r#"class="langs""#));
+
+    // Each language has a home listing only what is translated into it.
+    let r = get(&app, "/de/").await;
+    let html = r.text();
+    assert_eq!(r.status, StatusCode::OK);
+    assert!(html.contains("Umzug auf einen Server") && !html.contains("Only in English") && html.contains(r#"href="/de/one-server/""#));
+    assert!(html.contains(r#"hreflang="x-default" href="https://blog.example.com/""#) && html.contains(r#"rel="canonical" href="https://blog.example.com/de/""#));
+    assert_eq!(get(&app, "/de").await.headers["location"], "/de/");
+    assert_eq!(get(&app, "/de/one-server").await.headers["location"], "/de/one-server/");
+    assert_eq!(get(&app, "/fr/one-server/").await.status, StatusCode::NOT_FOUND, "drafts aren't served");
+    assert_eq!(get(&app, "/de/english-only/").await.status, StatusCode::NOT_FOUND);
+    assert_eq!(get(&app, "/de/sitemap.xml").await.status, StatusCode::NOT_FOUND, "one sitemap, at the root");
+    assert!(get(&app, "/zh-hans/one-server/").await.text().contains(r#"property="og:locale" content="zh_CN""#));
+
+    // Crawler files: sitemap alternates, per-language feeds, llms.txt, Markdown copies, share cards.
+    let sitemap = get(&app, "/sitemap.xml").await.text();
+    for needle in [r#"xmlns:xhtml="http://www.w3.org/1999/xhtml""#, "<loc>https://blog.example.com/de/one-server/</loc>",
+        "<loc>https://blog.example.com/pt-br/</loc>", r#"<xhtml:link rel="alternate" hreflang="de" href="https://blog.example.com/de/one-server/"/>"#,
+        r#"<xhtml:link rel="alternate" hreflang="x-default" href="https://blog.example.com/one-server/"/>"#] {
+        assert!(sitemap.contains(needle), "sitemap lacks {needle}");
+    }
+    assert!(!sitemap.contains("/fr/") && sitemap.matches("<loc>").count() == 9, "{sitemap}");
+    let feed = get(&app, "/de/feed.xml").await.text();
+    assert!(feed.contains(r#"xml:lang="de""#) && feed.contains("Umzug auf einen Server") && !feed.contains("Only in English"));
+    assert!(feed.contains(r#"<link rel="self" href="https://blog.example.com/de/feed.xml"/>"#));
+    let llms = get(&app, "/llms.txt").await.text();
+    assert!(llms.contains("[Deutsch](https://blog.example.com/de/llms.txt)"), "{llms}");
+    assert!(get(&app, "/de/llms.txt").await.text().contains("[Umzug auf einen Server](https://blog.example.com/de/one-server.md)"));
+    assert!(get(&app, "/de/one-server.md").await.text().starts_with("# Umzug auf einen Server\n"));
+    let en_card = get(&app, "/og/one-server.png").await;
+    let de_card = get(&app, "/de/og/one-server.png").await;
+    let zh_card = get(&app, "/zh-hans/og/one-server.png").await;
+    assert!(de_card.body.starts_with(b"\x89PNG") && de_card.body != en_card.body && zh_card.body.starts_with(b"\x89PNG"));
+    assert!(get(&app, "/de/tags/selbst-hosten/").await.text().contains("Umzug auf einen Server"));
+
+    // The blog can't switch its own language to one it has translations in; a blog written in pt-BR finds its pt-br locale.
+    let mut german = site.clone();
+    german["lang"] = json!("de");
+    assert_eq!(put("/api/sites/blog.example.com", german).await.status, StatusCode::BAD_REQUEST);
+    let br = json!({"title": "Notas", "lang": "pt-BR", "project_url": "https://example.com.br", "locales": {"pt-br": {"cta": "Conheça o Example."}}});
+    assert_eq!(put("/api/sites/blog.example.com.br", br).await.status, StatusCode::OK);
+    put("/api/sites/blog.example.com.br/posts/oi", json!({"title": "Oi", "body": "Olá.", "status": "published"})).await;
+    let html = send(&app, "GET", "blog.example.com.br", "/oi/", false, None, &[]).await.text();
+    assert!(html.contains("Conheça o Example.") && html.contains(r#"<html lang="pt-BR">"#) && html.contains(r#"content="pt_BR""#), "{html}");
+
+    // An RTL language reads right to left.
+    put("/api/sites/blog.example.com/posts/one-server/translations/ar", json!({"title": "الانتقال إلى خادم واحد", "body": "كل شيء.", "status": "published"})).await;
+    assert!(get(&app, "/ar/one-server/").await.text().contains(r#"<html lang="ar" dir="rtl">"#));
+
+    // Unpublishing the original hides its translations too; deleting it deletes them.
+    let draft = json!({"title": "Moving to one server", "body": body, "status": "draft"});
+    put("/api/sites/blog.example.com/posts/one-server", draft).await;
+    assert_eq!(get(&app, "/de/one-server/").await.status, StatusCode::NOT_FOUND);
+    send(&app, "DELETE", "admin", "/api/sites/blog.example.com/posts/one-server", true, None, &[]).await;
+    let r = send(&app, "GET", "admin", "/api/sites/blog.example.com/posts/one-server/translations/de", true, None, &[]).await;
+    assert_eq!(r.status, StatusCode::NOT_FOUND);
+    let _ = std::fs::remove_dir_all(&dir);
+}
